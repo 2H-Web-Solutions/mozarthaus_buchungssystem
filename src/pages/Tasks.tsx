@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { CheckCircle2, Circle, Clock } from 'lucide-react';
+import { Clock, CheckCircle2, Circle } from 'lucide-react';
+import { APP_ID } from '../lib/constants';
 
 // Das Schema gemäß den Global Task Sync Regeln
-interface Task {
+export interface Task {
   id: string;
   title: string;
   status: 'open' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
   dueDate: Timestamp;
 }
-
-const APP_ID = 'mozarthaus_new_buchungssystem_mozarthaus_v1';
 
 export function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);

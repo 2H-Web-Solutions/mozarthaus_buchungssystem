@@ -2,11 +2,12 @@ import { useState, ChangeEvent } from 'react';
 import { Upload, X } from 'lucide-react';
 
 interface ImageUploaderProps {
-  onImageSelected: (base64: string) => void;
+  onUpload: (base64: string) => void;
+  currentImage?: string;
 }
 
-export function ImageUploader({ onImageSelected }: ImageUploaderProps) {
-  const [preview, setPreview] = useState<string | null>(null);
+export function ImageUploader({ onUpload, currentImage }: ImageUploaderProps) {
+  const [preview, setPreview] = useState<string | null>(currentImage || null);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -16,7 +17,7 @@ export function ImageUploader({ onImageSelected }: ImageUploaderProps) {
     reader.onloadend = () => {
       const base64String = reader.result as string;
       setPreview(base64String);
-      onImageSelected(base64String);
+      onUpload(base64String);
     };
     reader.readAsDataURL(file);
   };
