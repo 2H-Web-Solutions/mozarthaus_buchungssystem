@@ -141,7 +141,7 @@ export function BookingKanban() {
      return (
        <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-4">
          <Loader2 className="w-10 h-10 animate-spin text-brand-primary" />
-         <p className="font-medium text-lg text-gray-600">Lade Kanban Board & Echtzeit-Pipeline...</p>
+         <p className="font-medium text-lg text-gray-600">Lade Status Board & Echtzeit-Pipeline...</p>
        </div>
      );
   }
