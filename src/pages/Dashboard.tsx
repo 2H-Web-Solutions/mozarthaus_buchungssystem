@@ -61,9 +61,14 @@ export function Dashboard() {
       const now = Date.now();
       snap.forEach(doc => {
          const data = doc.data() as Event;
-         if (data.date.toMillis() > now && data.status === 'active') e.push({ ...data, id: doc.id });
+         const dateMs = typeof data.date === 'string' ? new Date(data.date).getTime() : data.date.toMillis();
+         if (dateMs > now && data.status === 'active') e.push({ ...data, id: doc.id });
       });
-      e.sort((x, y) => x.date.toMillis() - y.date.toMillis());
+      e.sort((x, y) => {
+         const msX = typeof x.date === 'string' ? new Date(x.date).getTime() : x.date.toMillis();
+         const msY = typeof y.date === 'string' ? new Date(y.date).getTime() : y.date.toMillis();
+         return msX - msY;
+      });
       setUpcomingEvents(e);
       if (e.length > 0) setNextEvent(e[0]);
     });

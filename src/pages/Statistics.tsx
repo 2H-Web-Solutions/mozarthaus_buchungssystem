@@ -49,7 +49,7 @@ export function Statistics() {
     end.setHours(23, 59, 59, 999);
 
     const validEvents = events.filter(e => {
-        const d = e.date.toDate();
+        const d = typeof e.date === 'string' ? new Date(e.date) : e.date.toDate();
         return d >= start && d <= end;
     });
     const validEventIds = validEvents.map(e => e.id);
@@ -74,12 +74,34 @@ export function Statistics() {
     const occRate = totalCapacity > 0 ? Math.round((tTickets / totalCapacity) * 100) : 0;
 
     const enrichedBookings = fBookings.map(b => {
-       const ev = events.find(e => e.id === b.eventId);
+       let resolvedEventDateString = '';
+       let resolvedEventDateObject: Date | null = null;
+
+       if (b.eventId !== 'manual') {
+         const e = events.find(ev => ev.id === b.eventId);
+         if (e && e.date) {
+           if ((e.date as any)?.toDate) { // Check if it's a Firestore Timestamp
+             const d = (e.date as any).toDate();
+             resolvedEventDateObject = d;
+             resolvedEventDateString = d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+           } else { // Assume it's a string date
+             const d = new Date(e.date as string);
+             resolvedEventDateObject = d;
+             resolvedEventDateString = `${d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${e.time || ''}`;
+           }
+         }
+       } else {
+         const createdDate = b.createdAt.toDate();
+         resolvedEventDateObject = createdDate;
+         resolvedEventDateString = createdDate.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + createdDate.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+       }
+
        return {
            ...b,
-           resolvedEventDate: ev ? ev.date.toDate() : b.createdAt.toDate()
+           resolvedEventDate: resolvedEventDateObject, // Keep Date object for sorting
+           resolvedEventDateString: resolvedEventDateString // Add formatted string for display
        };
-    }).sort((a, b) => b.resolvedEventDate.getTime() - a.resolvedEventDate.getTime());
+    }).sort((a, b) => (b.resolvedEventDate?.getTime() || 0) - (a.resolvedEventDate?.getTime() || 0));
 
     return {
       filteredBookings: enrichedBookings,
@@ -198,7 +220,7 @@ export function Statistics() {
                       {b.isB2B && <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">B2B</span>}
                     </td>
                     <td className="p-4 text-gray-600 font-medium">
-                      {b.resolvedEventDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      {b.resolvedEventDate?.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </td>
                     <td className="p-4 text-gray-600 font-medium">
                        {b.seatIds ? b.seatIds.length : (b.tickets?.reduce((acc, t) => acc + t.quantity, 0) || 0)} Plätze

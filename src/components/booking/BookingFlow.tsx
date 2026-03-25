@@ -124,7 +124,7 @@ export function BookingFlow() {
 
       const eventDateRaw = selectedEvent?.date;
       const eventDateStr = eventDateRaw 
-        ? (typeof eventDateRaw.toDate === 'function' ? eventDateRaw.toDate().toISOString() : eventDateRaw as unknown as string) 
+        ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
         : '';
 
       await executeBookingTransaction({
@@ -187,10 +187,10 @@ export function BookingFlow() {
                <option value="">-- Bitte wählen --</option>
                {availableEvents.map(e => {
                  let displayDate = '';
-                 if (e.date && typeof e.date.toDate === 'function') {
-                   displayDate = e.date.toDate().toLocaleDateString('de-AT');
+                 if (e.date && typeof (e.date as any).toDate === 'function') {
+                   displayDate = (e.date as any).toDate().toLocaleDateString('de-AT');
                  } else if (e.date) {
-                   displayDate = new Date(e.date as unknown as string).toLocaleDateString('de-AT');
+                   displayDate = new Date(e.date as string).toLocaleDateString('de-AT');
                  }
                  
                  return (

@@ -96,7 +96,7 @@ export function EventDetails() {
         <div className="p-8 border-b border-gray-200 bg-white flex justify-between items-center shadow-sm z-10">
           <div>
             <h1 className="text-3xl font-heading text-brand-primary font-bold mb-2">{event.title}</h1>
-            <p className="text-gray-600 font-medium">📅 {event.date.toDate().toLocaleString('de-AT', { dateStyle: 'full', timeStyle: 'short' })} Uhr</p>
+            <p className="text-gray-600 font-medium">📅 {(event.date as any)?.toDate ? (event.date as any).toDate().toLocaleString('de-AT', { dateStyle: 'full', timeStyle: 'short' }) + ' Uhr' : `${new Date(event.date as string).toLocaleDateString('de-AT', { dateStyle: 'full'})} ${event.time || ''} Uhr`}</p>
           </div>
           <div className="hidden md:block px-4 py-2 bg-gray-100 text-gray-800 rounded-lg text-sm font-bold border border-gray-200">
             Status: {event.status.toUpperCase()}
