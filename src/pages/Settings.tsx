@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { ImageUploader } from '../components/ImageUploader';
 import { CopyableField } from '../components/CopyableField';
+import { DataSeeder } from '../components/admin/DataSeeder';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<'general' | 'integrations'>('general');
@@ -148,6 +149,8 @@ export function Settings() {
 
       {activeTab === 'integrations' && (
         <div className="space-y-6">
+          <DataSeeder />
+          
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <h2 className="text-lg font-medium text-gray-900 mb-2">n8n / Regiondo Webhooks (Phase 2)</h2>
             <p className="text-sm text-gray-500 mb-6">Nutze diese Endpunkte, um externe Buchungsinformationen (z.B. Regiondo, B2B APIs) sicher an das System zu leiten.</p>
