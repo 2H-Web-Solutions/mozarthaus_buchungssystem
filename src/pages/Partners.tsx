@@ -132,6 +132,7 @@ export function Partners() {
                <div>
                   <label className="block text-sm text-gray-700 mb-1">Typ</label>
                   <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary">
+                    {partnerTypes.length === 0 && <option value="">Keine Typen angelegt</option>}
                     {partnerTypes.map(pt => (
                       <option key={pt.id} value={pt.id}>{pt.name}</option>
                     ))}
