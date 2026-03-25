@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CalendarDays, Calendar, Users, Settings as SettingsIcon, LayoutDashboard, Ticket, Columns } from 'lucide-react';
+import { CalendarDays, Calendar, Users, Settings as SettingsIcon, LayoutDashboard, Ticket, Columns, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -10,6 +10,13 @@ export function Sidebar() {
   const location = useLocation();
   const { isSyncing } = useN8nActions();
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [isPartnerMenuOpen, setIsPartnerMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/partner')) {
+      setIsPartnerMenuOpen(true);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const docRef = doc(db, `apps/${APP_ID}/settings`, 'general');
@@ -31,7 +38,14 @@ export function Sidebar() {
     { name: 'Events / Termine', path: '/events', icon: CalendarDays },
     { name: 'Kanban Board', path: '/kanban', icon: Columns },
     { name: 'Transaktions-Log', path: '/bookings', icon: Calendar },
-    { name: 'Partner', path: '/partners', icon: Users },
+    { 
+      name: 'Partner', 
+      icon: Users,
+      subItems: [
+        { name: 'Übersicht', path: '/partners' },
+        { name: 'Partner Typen', path: '/partner-types' }
+      ]
+    },
     // { name: 'Tasks', path: '/tasks', icon: undefined }, // Hidden for now
     { name: 'Einstellungen', path: '/settings', icon: SettingsIcon },
   ];
@@ -59,6 +73,50 @@ export function Sidebar() {
       <nav className="flex-1 px-4 py-6 space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon;
+          
+          if (item.subItems) {
+            const isActive = item.subItems.some(sub => location.pathname === sub.path);
+            return (
+              <div key={item.name} className="space-y-1">
+                <button
+                  onClick={() => setIsPartnerMenuOpen(!isPartnerMenuOpen)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+                    isActive 
+                      ? 'bg-white/50 text-brand-primary font-medium' 
+                      : 'text-gray-800 hover:text-brand-primary hover:bg-white/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className="w-5 h-5" />
+                    {item.name}
+                  </div>
+                  {isPartnerMenuOpen ? <ChevronDown className="w-4 h-4 text-brand-primary" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                </button>
+                
+                {isPartnerMenuOpen && (
+                  <div className="ml-9 space-y-1 mt-1">
+                    {item.subItems.map(subItem => {
+                      const isSubActive = location.pathname === subItem.path;
+                      return (
+                        <Link
+                          key={subItem.name}
+                          to={subItem.path}
+                          className={`block px-3 py-2 rounded-md text-sm transition-colors ${
+                            isSubActive 
+                              ? 'text-brand-primary font-bold bg-white/60' 
+                              : 'text-gray-600 hover:text-brand-primary hover:bg-white/30'
+                          }`}
+                        >
+                          {subItem.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           const isActive = location.pathname === item.path;
           return (
             <Link
