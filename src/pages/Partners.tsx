@@ -33,17 +33,19 @@ export function Partners() {
     const slugId = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
     try {
+      // Optimistic UI closure
+      setIsModalOpen(false);
+      setCompanyName('');
+      setContactPerson('');
+      setEmail('');
+      setType('b2b');
+
       await setDoc(doc(db, `apps/${APP_ID}/partners`, slugId), {
         companyName,
         contactPerson,
         email,
         type
       });
-      setIsModalOpen(false);
-      setCompanyName('');
-      setContactPerson('');
-      setEmail('');
-      setType('b2b');
     } catch(err) {
       alert('Fehler beim Speichern');
     } finally {

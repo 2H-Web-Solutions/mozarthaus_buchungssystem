@@ -37,6 +37,9 @@ export function Events() {
     const eventId = `${titleSlug}_${dateStr}`;
     
     try {
+      // Close modal instantly for optimistic feedback
+      setIsModalOpen(false);
+
       const batch = writeBatch(db);
       
       batch.set(doc(db, `apps/${APP_ID}/events`, eventId), {
@@ -50,7 +53,6 @@ export function Events() {
       // Initialize the seat subcollection utilizing the new standard service
       await initializeEventSeats(eventId);
       
-      setIsModalOpen(false);
       navigate(`/events/${eventId}`);
     } catch(err) {
       console.error(err);
