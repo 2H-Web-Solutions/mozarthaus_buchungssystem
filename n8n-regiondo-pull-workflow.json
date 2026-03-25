@@ -1,21 +1,46 @@
 {
-  "name": "Regiondo API Pull Sync",
+  "name": "Regiondo Polling Sync",
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "GET",
-        "path": "sync-regiondo-events",
-        "responseMode": "onReceived",
-        "options": {}
+        "rule": {
+          "interval": [
+            { "field": "seconds", "secondsInterval": 15 }
+          ]
+        }
       },
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ],
-      "webhookId": "sync-regiondo-events-uuid"
+      "position": [ 0, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "projectId": "mozarthaus-6cf51",
+        "collection": "apps/mozarthaus_new_buchungssystem_mozarthaus_v1/actions",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            { "field": "status", "operator": "EQUAL", "value": "pending" },
+            { "field": "action_type", "operator": "EQUAL", "value": "sync_regiondo_events" }
+          ]
+        }
+      },
+      "name": "Fetch Pending Sync",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [ 200, 300 ],
+      "credentials": { "googleApi": { "id": "", "name": "Google API" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst publicKey = 'MO43f21d011626';\nconst privateKey = '43f21d0f4ba8f05b111626d551fd8509160d0';\nconst timestamp = Date.now().toString();\n\n// Build string to hash: publicKey + timestamp \nconst stringToHash = publicKey + timestamp;\n\n// Create HMAC SHA256 signature\nconst hash = crypto.createHmac('sha256', privateKey).update(stringToHash).digest('hex');\n\nreturn {\n  json: {\n    ...$input.item.json,\n    'X-API-ID': publicKey,\n    'X-API-TIME': timestamp,\n    'X-API-HASH': hash\n  }\n};"
+      },
+      "name": "Generate Regiondo Auth HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [ 400, 300 ]
     },
     {
       "parameters": {
@@ -23,62 +48,76 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "X-PUBLIC-KEY",
-              "value": "MO43f21d011626"
-            },
-            {
-              "name": "X-SECRET-KEY",
-              "value": "43f21d0f4ba8f05b111626d551fd8509160d0"
-            }
+            { "name": "X-API-ID", "value": "={{$json[\"X-API-ID\"]}}" },
+            { "name": "X-API-TIME", "value": "={{$json[\"X-API-TIME\"]}}" },
+            { "name": "X-API-HASH", "value": "={{$json[\"X-API-HASH\"]}}" }
           ]
-        },
-        "options": {}
+        }
       },
-      "name": "HTTP Request",
+      "name": "HTTP Regiondo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [
-        450,
-        300
-      ]
+      "position": [ 600, 300 ]
     },
     {
       "parameters": {
-        "jsCode": "const events = ($input.item.json.data || $input.item.json) || [];\nconst mappedEvents = [];\n\nfor (const event of events) {\n  const eventId = 'event_' + (event.id || Date.now() + Math.random().toString(36).substring(7));\n  \n  mappedEvents.push({\n    json: {\n      id: eventId,\n      date: event.date || event.start_date || new Date().toISOString().split('T')[0],\n      time: event.time || event.start_time || '19:30',\n      title: event.product_name || 'Mozart Ensemble',\n      status: 'active',\n      updatedAt: new Date().toISOString()\n    }\n  });\n}\n\nreturn mappedEvents;"
+        "jsCode": "const events = ($input.item.json.data || $input.item.json) || [];\nconst mappedEvents = [];\n\nfor (const event of events) {\n  const eventId = 'event_' + (event.id || Date.now() + Math.random().toString(36).substring(7));\n  mappedEvents.push({\n    json: {\n      id: eventId,\n      date: event.date || event.start_date || new Date().toISOString().split('T')[0],\n      time: event.time || event.start_time || '19:30',\n      title: event.product_name || 'Mozart Ensemble',\n      status: 'active',\n      updatedAt: new Date().toISOString()\n    }\n  });\n}\nreturn mappedEvents;"
       },
       "name": "Data Mapping",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        650,
-        300
-      ]
+      "position": [ 800, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "projectId": "mozarthaus-6cf51",
+        "collection": "apps/mozarthaus_new_buchungssystem_mozarthaus_v1/events",
+        "documentId": "={{$json.id}}",
+        "columns": "date,time,title,status,updatedAt"
+      },
+      "name": "Firestore Upsert",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [ 1000, 300 ],
+      "credentials": { "googleApi": { "id": "", "name": "Google API" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "projectId": "mozarthaus-6cf51",
+        "collection": "apps/mozarthaus_new_buchungssystem_mozarthaus_v1/actions",
+        "documentId": "={{ $('Fetch Pending Sync').first().json.id }}",
+        "columns": "status,result",
+        "dataToUpdate": "={\n  \"status\": \"completed\",\n  \"result\": \"success\"\n}"
+      },
+      "name": "Mark Completed",
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1,
+      "position": [ 1200, 300 ],
+      "executeOnce": true,
+      "credentials": { "googleApi": { "id": "", "name": "Google API" } }
     }
   ],
   "connections": {
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Schedule Trigger": {
+      "main": [ [ { "node": "Fetch Pending Sync", "type": "main", "index": 0 } ] ]
     },
-    "HTTP Request": {
-      "main": [
-        [
-          {
-            "node": "Data Mapping",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Fetch Pending Sync": {
+      "main": [ [ { "node": "Generate Regiondo Auth HMAC", "type": "main", "index": 0 } ] ]
+    },
+    "Generate Regiondo Auth HMAC": {
+      "main": [ [ { "node": "HTTP Regiondo", "type": "main", "index": 0 } ] ]
+    },
+    "HTTP Regiondo": {
+      "main": [ [ { "node": "Data Mapping", "type": "main", "index": 0 } ] ]
+    },
+    "Data Mapping": {
+      "main": [ [ { "node": "Firestore Upsert", "type": "main", "index": 0 } ] ]
+    },
+    "Firestore Upsert": {
+      "main": [ [ { "node": "Mark Completed", "type": "main", "index": 0 } ] ]
     }
   },
-  "active": true
+  "active": false
 }
