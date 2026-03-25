@@ -31,6 +31,8 @@ export interface Booking {
     name: string;
     email: string;
   };
+  eventDate?: string;
+  eventTitle?: string;
   totalAmount: number;
   createdAt: Timestamp;
   updatedAt?: string | Timestamp;

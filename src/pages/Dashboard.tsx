@@ -132,7 +132,10 @@ export function Dashboard() {
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-lg">{b.customerData.name}</p>
-                    <p className="text-sm text-gray-500 font-medium mt-1">{b.eventId.replace(/_/g, ' ')} · <span className="text-brand-primary">{b.seatIds?.length || 0} Plätze</span></p>
+                    <p className="text-sm text-gray-500 font-medium mt-1">
+                      {b.eventDate ? new Date(b.eventDate).toLocaleDateString('de-AT', { day: '2-digit', month: 'short' }) + ' · ' : ''}
+                      {b.eventTitle || b.eventId.replace(/_/g, ' ')} · <span className="text-brand-primary">{b.seatIds?.length || 0} Plätze</span>
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">

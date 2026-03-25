@@ -112,9 +112,13 @@ export function BookingFlow() {
       if (catB > 0) tickets.push({ categoryId: 'cat_b', quantity: catB });
       if (student > 0) tickets.push({ categoryId: 'student', quantity: student });
 
+      const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
+
       await executeBookingTransaction({
         eventId: derivedEventId,
         variantId: variant,
+        eventTitle: selectedEvent?.title || '',
+        eventDate: selectedEvent?.date ? selectedEvent.date.toDate().toISOString() : '',
         partnerId: selectedPartnerId || null,
         isB2B: !!selectedPartnerId,
         source: selectedPartnerId ? 'b2b' : 'manual',

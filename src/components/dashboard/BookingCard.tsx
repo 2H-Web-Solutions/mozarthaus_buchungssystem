@@ -54,9 +54,12 @@ export function BookingCard({ booking, index, partners }: { booking: Booking; in
             )}
           </div>
 
-          <p className="text-xs text-gray-500 flex items-center gap-2 mb-4 font-medium" title={booking.eventId}>
+          <p className="text-xs text-gray-500 flex items-center gap-2 mb-4 font-medium" title={booking.eventTitle || booking.eventId}>
             <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <span className="truncate">{booking.variantId ? `${booking.variantId} • ${booking.eventId}` : booking.eventId}</span>
+            <span className="truncate">
+              {booking.eventDate ? new Date(booking.eventDate).toLocaleDateString('de-AT', { day: '2-digit', month: 'short' }) + ' · ' : ''}
+              {booking.eventTitle || booking.eventId.replace(/_/g, ' ')}
+            </span>
           </p>
 
           <div className="pt-3 border-t border-gray-100 flex justify-between items-center">

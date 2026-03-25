@@ -4,6 +4,13 @@ import { APP_ID } from '../lib/constants';
 import { Booking, Seat } from '../types/schema';
 import { notifyN8n } from './n8nService';
 
+const generateBookingId = () => {
+  const prefix = 'RES';
+  const timestamp = Date.now().toString().slice(-4);
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${prefix}-${timestamp}-${random}`;
+};
+
 /**
  * Ensures strict cross-client data integrity when finalizing reservations.
  * Atomically checks seat statuses, blocks them, and emits the Booking document.
@@ -12,7 +19,7 @@ export async function executeBookingTransaction(
   bookingData: Omit<Booking, 'id' | 'createdAt'>,
   selectedSeatIds: string[]
 ): Promise<string> {
-  const bookingId = `booking_${bookingData.eventId}_${Date.now()}`;
+  const bookingId = generateBookingId();
   const bookingRef = doc(db, `apps/${APP_ID}/bookings`, bookingId);
   const seatsColPath = `apps/${APP_ID}/events/${bookingData.eventId}/seats`;
 
