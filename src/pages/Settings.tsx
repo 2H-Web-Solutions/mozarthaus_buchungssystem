@@ -15,9 +15,9 @@ export function Settings() {
   const [isSavingTexts, setIsSavingTexts] = useState(false);
 
   // Pricing Model
-  const [premiumPrice, setPremiumPrice] = useState(65);
-  const [standardPrice, setStandardPrice] = useState(45);
-  const [wheelchairPrice, setWheelchairPrice] = useState(25);
+  const [priceCatA, setPriceCatA] = useState(69);
+  const [priceCatB, setPriceCatB] = useState(59);
+  const [priceStudent, setPriceStudent] = useState(42);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
 
   useEffect(() => {
@@ -31,16 +31,16 @@ export function Settings() {
       }
     });
 
-    const unsubCore = onSnapshot(doc(db, `apps/${APP_ID}/settings`, 'core_config'), (snap) => {
+    const unsubPricing = onSnapshot(doc(db, `apps/${APP_ID}/config`, 'pricing'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.premiumPrice !== undefined) setPremiumPrice(data.premiumPrice);
-        if (data.standardPrice !== undefined) setStandardPrice(data.standardPrice);
-        if (data.wheelchairPrice !== undefined) setWheelchairPrice(data.wheelchairPrice);
+        if (data.catA !== undefined) setPriceCatA(data.catA);
+        if (data.catB !== undefined) setPriceCatB(data.catB);
+        if (data.student !== undefined) setPriceStudent(data.student);
       }
     });
     
-    return () => { unsubGen(); unsubCore(); };
+    return () => { unsubGen(); unsubPricing(); };
   }, []);
 
   const handleLogoUpload = async (base64: string) => {
@@ -58,10 +58,10 @@ export function Settings() {
 
   const savePricing = async () => {
     setIsSavingPricing(true);
-    await setDoc(doc(db, `apps/${APP_ID}/settings`, 'core_config'), {
-      premiumPrice,
-      standardPrice,
-      wheelchairPrice
+    await setDoc(doc(db, `apps/${APP_ID}/config`, 'pricing'), {
+      catA: priceCatA,
+      catB: priceCatB,
+      student: priceStudent
     }, { merge: true });
     setTimeout(() => setIsSavingPricing(false), 1000);
   };
@@ -90,19 +90,19 @@ export function Settings() {
         <div className="space-y-6">
           {/* Prices */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Preiskategorien (Core Config)</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Preiskategorien (Master Config)</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Premium (€)</label>
-                <input type="number" value={premiumPrice} onChange={e => setPremiumPrice(Number(e.target.value))} className="w-full p-2 border border-brand-primary rounded-lg focus:ring-1 focus:ring-brand-primary" />
+                <label className="block text-sm text-gray-700 mb-1">Kategorie A (€)</label>
+                <input type="number" value={priceCatA} onChange={e => setPriceCatA(Number(e.target.value))} className="w-full p-2 border border-brand-primary rounded-lg focus:ring-1 focus:ring-brand-primary outline-none" />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Standard (€)</label>
-                <input type="number" value={standardPrice} onChange={e => setStandardPrice(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-brand-primary" />
+                <label className="block text-sm text-gray-700 mb-1">Kategorie B (€)</label>
+                <input type="number" value={priceCatB} onChange={e => setPriceCatB(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-brand-primary outline-none" />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Rollstuhl (€)</label>
-                <input type="number" value={wheelchairPrice} onChange={e => setWheelchairPrice(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-brand-primary" />
+                <label className="block text-sm text-gray-700 mb-1">Student (€)</label>
+                <input type="number" value={priceStudent} onChange={e => setPriceStudent(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-brand-primary outline-none" />
               </div>
             </div>
             <button onClick={savePricing} className="bg-brand-primary text-white px-4 py-2 rounded-lg hover:bg-red-700">

@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { APP_ID } from '../../lib/constants';
 import { useNavigate } from 'react-router-dom';
 import { fetchPartners } from '../../services/partnerService';
 import { executeBookingTransaction } from '../../services/transactionService';
@@ -19,9 +22,14 @@ export function BookingFlow() {
   const [customerEmail, setCustomerEmail] = useState('');
   
   // Section 3
-  const [catA, setCatA] = useState(0); // 69 EUR
-  const [catB, setCatB] = useState(0); // 59 EUR
-  const [student, setStudent] = useState(0); // 42 EUR
+  const [catA, setCatA] = useState(0); 
+  const [catB, setCatB] = useState(0); 
+  const [student, setStudent] = useState(0); 
+  
+  // Realtime Pricing State
+  const [priceCatA, setPriceCatA] = useState(69);
+  const [priceCatB, setPriceCatB] = useState(59);
+  const [priceStudent, setPriceStudent] = useState(42);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -32,9 +40,21 @@ export function BookingFlow() {
 
   useEffect(() => {
     fetchPartners().then(setPartners);
+    
+    // Live stream master pricing configs
+    const unsubPricing = onSnapshot(doc(db, `apps/${APP_ID}/config`, 'pricing'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.catA !== undefined) setPriceCatA(data.catA);
+        if (data.catB !== undefined) setPriceCatB(data.catB);
+        if (data.student !== undefined) setPriceStudent(data.student);
+      }
+    });
+
+    return () => unsubPricing();
   }, []);
 
-  const totalPrice = (catA * 69) + (catB * 59) + (student * 42);
+  const totalPrice = (catA * priceCatA) + (catB * priceCatB) + (student * priceStudent);
   const totalTickets = catA + catB + student;
 
   const handleSubmit = async () => {
@@ -151,7 +171,7 @@ export function BookingFlow() {
            <div className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center justify-between shadow-sm">
              <div className="text-center mb-6">
                 <span className="block text-xl font-bold text-gray-900 mb-1">Kategorie A</span>
-                <span className="block text-sm text-gray-500 font-medium">69,00 € pro Ticket</span>
+                <span className="block text-sm text-gray-500 font-medium">{priceCatA.toFixed(2)} € pro Ticket</span>
              </div>
              <div className="flex items-center gap-5">
                <button onClick={() => setCatA(Math.max(0, catA - 1))} className="w-12 h-12 rounded-full bg-white border border-gray-300 flex items-center justify-center font-bold text-2xl hover:bg-gray-100 shadow-sm active:scale-95 transition-transform">-</button>
@@ -164,7 +184,7 @@ export function BookingFlow() {
            <div className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center justify-between shadow-sm">
              <div className="text-center mb-6">
                 <span className="block text-xl font-bold text-gray-900 mb-1">Kategorie B</span>
-                <span className="block text-sm text-gray-500 font-medium">59,00 € pro Ticket</span>
+                <span className="block text-sm text-gray-500 font-medium">{priceCatB.toFixed(2)} € pro Ticket</span>
              </div>
              <div className="flex items-center gap-5">
                <button onClick={() => setCatB(Math.max(0, catB - 1))} className="w-12 h-12 rounded-full bg-white border border-gray-300 flex items-center justify-center font-bold text-2xl hover:bg-gray-100 shadow-sm active:scale-95 transition-transform">-</button>
@@ -177,7 +197,7 @@ export function BookingFlow() {
            <div className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center justify-between shadow-sm">
              <div className="text-center mb-6">
                 <span className="block text-xl font-bold text-gray-900 mb-1">Student</span>
-                <span className="block text-sm text-gray-500 font-medium">42,00 € pro Ticket</span>
+                <span className="block text-sm text-gray-500 font-medium">{priceStudent.toFixed(2)} € pro Ticket</span>
              </div>
              <div className="flex items-center gap-5">
                <button onClick={() => setStudent(Math.max(0, student - 1))} className="w-12 h-12 rounded-full bg-white border border-gray-300 flex items-center justify-center font-bold text-2xl hover:bg-gray-100 shadow-sm active:scale-95 transition-transform">-</button>
