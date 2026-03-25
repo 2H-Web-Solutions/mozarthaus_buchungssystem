@@ -9,6 +9,7 @@ import { Bookings } from './pages/Bookings';
 import { Kanban } from './pages/Kanban';
 import { Partners } from './pages/Partners';
 import { BookingFlow } from './components/booking/BookingFlow';
+import { SyncValidator } from './components/admin/SyncValidator';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="partners" element={<Partners />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="admin/system-test" element={<SyncValidator />} />
         </Route>
       </Routes>
     </Router>
