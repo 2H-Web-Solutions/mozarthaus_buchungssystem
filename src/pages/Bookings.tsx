@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking } from '../types/schema';
 import { cancelBooking } from '../services/bookingService';
-import { Search, Filter, Ban, Users, UsersRound } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 
 export function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -89,99 +89,76 @@ export function Bookings() {
       </div>
 
       <div className="bg-white rounded-b-lg shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500 uppercase tracking-wider">
-              <th className="p-4">ID & Datum</th>
-              <th className="p-4">Kunde</th>
-              <th className="p-4">Plätze</th>
-              <th className="p-4">Betrag</th>
-              <th className="p-4">Quelle / Status</th>
-              <th className="p-4 text-right">Aktion</th>
+            <tr className="bg-gray-100 border-b border-gray-300 text-xs font-bold text-gray-700 uppercase tracking-wider">
+              <th className="p-3 border-r border-gray-200">ID</th>
+              <th className="p-3 border-r border-gray-200">Erstellt am</th>
+              <th className="p-3 border-r border-gray-200">Event / Datum</th>
+              <th className="p-3 border-r border-gray-200">Name</th>
+              <th className="p-3 border-r border-gray-200">E-Mail</th>
+              <th className="p-3 border-r border-gray-200">Tickets</th>
+              <th className="p-3 border-r border-gray-200">Betrag</th>
+              <th className="p-3 border-r border-gray-200">Quelle</th>
+              <th className="p-3 border-r border-gray-200">Status</th>
+              <th className="p-3">Aktion</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 text-sm">
+          <tbody className="divide-y divide-gray-200">
              {filteredBookings.length === 0 ? (
-               <tr><td colSpan={6} className="p-8 text-center text-gray-500">Keine Buchungen gefunden.</td></tr>
+               <tr><td colSpan={10} className="p-8 text-center text-gray-500">Keine Buchungen gefunden.</td></tr>
              ) : filteredBookings.map(b => (
                <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                 <td className="p-4">
-                   <div className="font-medium text-gray-900">{b.id?.split('-')?.pop() || 'IMPORT'}</div>
-                   <div className="text-xs text-gray-500">
-                     {(b.createdAt as any)?.toDate 
-                       ? (b.createdAt as any).toDate().toLocaleString('de-AT') 
-                       : new Date(b.createdAt as any).toLocaleString('de-AT')}
-                   </div>
-                   <div className="text-xs text-brand-primary mt-1">{b.eventId}</div>
+                 <td className="p-3 border-r border-gray-200 font-mono text-xs text-gray-600 max-w-[120px] truncate" title={b.id}>
+                   {b.id?.replace('booking_regiondo_', '') || b.id}
                  </td>
-                 <td className="p-4">
-                   <div className="font-medium">{b.customerData?.name || 'Unbekannt'}</div>
-                   <div className="text-gray-500">{b.customerData?.email || '-'}</div>
-                   {/* NEU: Zusätzliche Infos für Gruppenbuchungen */}
-                   {b.bookingType === 'gruppe' && (
-                     <div className="text-xs text-blue-600 mt-1 font-medium">
-                       Ref: {b.sellerReference} | Kontakt: {b.contactPerson}
-                     </div>
-                   )}
+                 <td className="p-3 border-r border-gray-200 whitespace-nowrap text-gray-700">
+                   {(b.createdAt as any)?.toDate 
+                     ? (b.createdAt as any).toDate().toLocaleString('de-AT') 
+                     : new Date(b.createdAt as any).toLocaleString('de-AT')}
                  </td>
-                 <td className="p-4 max-w-xs">
-                   {b.bookingType === 'einzel' || b.bookingType === 'gruppe' || !b.bookingType ? (
-                     <div className="flex flex-col gap-2">
-                       {b.bookingType === 'gruppe' && (
-                         <div className="flex items-center gap-2 bg-blue-50 p-1.5 rounded-md border border-blue-100 w-fit mb-1">
-                           <Users className="w-3.5 h-3.5 text-blue-500" />
-                           <span className="text-xs font-medium text-blue-700">{b.groupPersons} Personen (Gruppe)</span>
-                         </div>
-                       )}
-                       <div className="flex flex-wrap gap-1">
-                         {b.seatIds?.map(sid => (
-                           <span key={sid} className="bg-gray-100 border border-gray-200 text-gray-700 text-[10px] px-1.5 py-0.5 rounded uppercase">
-                             {sid.replace(/row_|_seat_/g, ' ')}
-                           </span>
-                         ))}
-                       </div>
-                       <div className="text-xs text-gray-500">{b.seatIds?.length || 0} Platz/Plätze</div>
-                     </div>
+                 <td className="p-3 border-r border-gray-200">
+                   <div className="font-medium text-brand-primary">{b.eventId}</div>
+                   {b.dateTime && <div className="text-xs text-gray-500">{b.dateTime}</div>}
+                 </td>
+                 <td className="p-3 border-r border-gray-200 font-medium text-gray-900">
+                   {b.customerData?.name || '-'}
+                 </td>
+                 <td className="p-3 border-r border-gray-200 text-gray-600">
+                   {b.customerData?.email || '-'}
+                 </td>
+                 <td className="p-3 border-r border-gray-200 whitespace-nowrap">
+                   {b.bookingType === 'gruppe' || b.groupPersons ? (
+                     <span className="font-medium">{b.groupPersons} Personen</span>
+                   ) : b.seatIds && b.seatIds.length > 0 ? (
+                     <span className="font-medium">{b.seatIds.length} Plätze</span>
+                   ) : b.tickets && b.tickets.length > 0 ? (
+                     <span className="font-medium">{b.tickets.reduce((sum: number, t: any) => sum + (t.quantity || 1), 0)} Tickets</span>
                    ) : (
-                     <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200 w-fit">
-                       <UsersRound className="w-4 h-4 text-purple-500" />
-                       <span className="font-medium text-gray-700">{b.groupPersons} Personen (Privat)</span>
-                     </div>
+                     <span className="text-gray-400">0</span>
                    )}
                  </td>
-                 <td className="p-4 font-bold">
+                 <td className="p-3 border-r border-gray-200 font-bold whitespace-nowrap">
                    € {calculateTotal(b).toFixed(2)}
                  </td>
-                 <td className="p-4">
-                   <div className="mb-1 flex flex-wrap gap-1">
-                     <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                       {b.source ? b.source.toUpperCase() : 'UNKNOWN'}
-                     </span>
-                     {/* NEU: Badge für den Buchungstyp */}
-                     {b.bookingType && (
-                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                         b.bookingType === 'einzel' ? 'bg-gray-50 text-gray-700 border-gray-200' : 
-                         b.bookingType === 'gruppe' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
-                         'bg-purple-50 text-purple-700 border-purple-200'
-                       }`}>
-                         {b.bookingType.toUpperCase()}
-                       </span>
-                     )}
-                   </div>
-                   <div>
-                     <span className={`px-2 py-0.5 rounded text-xs font-medium border ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                       {b.status ? b.status.toUpperCase() : 'IMPORTED'}
-                     </span>
-                   </div>
+                 <td className="p-3 border-r border-gray-200">
+                   <span className="px-2 py-1 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+                     {b.source || 'MANUELL'}
+                   </span>
                  </td>
-                 <td className="p-4 text-right">
+                 <td className="p-3 border-r border-gray-200">
+                   <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                     {b.status || 'UNKNOWN'}
+                   </span>
+                 </td>
+                 <td className="p-3 text-right">
                    {b.status === 'confirmed' && (
                      <button 
                        onClick={() => handleCancel(b.id)}
                        disabled={isCancelling === b.id}
-                       className="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded disabled:opacity-50 transition-colors"
+                       className="text-red-600 hover:text-red-800 text-xs font-bold disabled:opacity-50"
                      >
-                       <Ban className="w-4 h-4" /> {isCancelling === b.id ? 'Lädt...' : 'Stornieren'}
+                       {isCancelling === b.id ? '...' : 'Stornieren'}
                      </button>
                    )}
                  </td>
