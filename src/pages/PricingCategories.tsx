@@ -117,7 +117,8 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
       price: 0,
       colorCode: '#c02a2a',
       isActive: true,
-      description: ''
+      description: '',
+      regiondoOptionId: ''
     }
   );
 
@@ -237,6 +238,18 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
                 rows={2}
                 className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none resize-none"
               />
+            </div>
+            
+            <div className="bg-red-50 p-4 border border-brand-primary/20 rounded-xl">
+              <label className="block text-sm font-bold text-brand-primary mb-1">Regiondo Option ID (Integration)</label>
+              <input
+                type="text"
+                value={formData.regiondoOptionId || ''}
+                onChange={e => setFormData({ ...formData, regiondoOptionId: e.target.value })}
+                placeholder="z.B. 1549178"
+                className="w-full p-2.5 border border-brand-primary/30 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none font-mono"
+              />
+              <p className="text-xs text-brand-primary/70 mt-1">Erforderlich für den Regiondo Inbound/Outbound Sync der Ticket-Zuweisung.</p>
             </div>
           </div>
 

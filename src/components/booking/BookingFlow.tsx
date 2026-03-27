@@ -20,6 +20,7 @@ export function BookingFlow() {
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   
   const [bookingType, setBookingType] = useState<'einzel' | 'gruppe' | 'privat'>('einzel');
   const [sellerReference, setSellerReference] = useState('');
@@ -131,14 +132,14 @@ export function BookingFlow() {
     if (bookingType === 'einzel') {
       if (totalTickets === 0) return alert("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
       if (selectedSeats.length !== totalTickets) return alert(`Bitte weise genau ${totalTickets} Sitzplätze im physischen Saalplan zu.`);
-      if (!customerName || !customerEmail) return alert("Kundenname und Email sind zwingend erforderlich.");
+      if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
     } else if (bookingType === 'gruppe') {
       if (!selectedPartnerId) return alert("Bitte wähle einen Partner für die Gruppenbuchung aus.");
       if (!sellerReference || !contactPerson) return alert("Verkäuferreferenz und Kontaktperson sind erforderlich.");
       if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
       if (selectedSeats.length !== totalTickets) return alert(`Bitte weise genau ${totalTickets} Sitzplätze im physischen Saalplan zu.`);
     } else if (bookingType === 'privat') {
-      if (!customerName || !customerEmail) return alert("Kundenname und Email sind zwingend erforderlich.");
+      if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
       if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
       if (!privateEventDate || !privateEventTime) return alert("Bitte Datum und Uhrzeit für das Privat-Event angeben.");
     }
@@ -197,7 +198,7 @@ export function BookingFlow() {
         groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
         customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
         tickets,
-        customerData: { name: customerName, email: customerEmail },
+        customerData: { name: customerName, email: customerEmail, phone: customerPhone },
         totalAmount: totalPrice,
         regiondoProductId: selectedEvent?.regiondoId
       }, (bookingType === 'einzel' || bookingType === 'gruppe') ? selectedSeats : []);
@@ -332,7 +333,7 @@ export function BookingFlow() {
              </div>
            )}
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <div>
                <label className="block text-sm font-bold text-gray-700 mb-2">{bookingType === 'gruppe' ? 'E-Mail für Bestätigung' : 'Vor- und Nachname'}</label>
                {bookingType === 'gruppe' ? (
@@ -347,6 +348,10 @@ export function BookingFlow() {
                  <input type="email" placeholder="max@example.com" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none shadow-sm" />
                </div>
              )}
+             <div>
+               <label className="block text-sm font-bold text-gray-700 mb-2">Telefonnummer</label>
+               <input type="tel" placeholder="+43 123 45678" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className={`w-full p-4 border border-gray-300 rounded-xl focus:ring-2 outline-none shadow-sm ${bookingType === 'gruppe' ? 'focus:ring-blue-500' : 'focus:ring-brand-primary'}`} />
+             </div>
            </div>
         </div>
       </section>

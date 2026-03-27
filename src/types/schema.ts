@@ -42,6 +42,7 @@ export interface Booking {
   customerData: {
     name: string;
     email: string;
+    phone?: string; // NEU: Telefonnummer für Regiondo
   };
   eventDate?: string;
   eventTitle?: string;

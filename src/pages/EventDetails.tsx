@@ -26,6 +26,7 @@ export function EventDetails() {
   // Booking Form State
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [source, setSource] = useState<'manual' | 'boxoffice' | 'phone' | 'website' | 'regiondo' | 'b2b'>('manual');
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
@@ -83,7 +84,7 @@ export function EventDetails() {
 
   const handleBooking = async () => {
     if (selectedSeatIds.length === 0) return;
-    if (!customerName || !customerEmail) return alert('Bitte Kundenname und Email angeben!');
+    if (!customerName || !customerEmail || !customerPhone) return alert('Bitte Kundenname, Email und Telefonnummer angeben!');
     if (source === 'b2b' && !selectedPartnerId) return alert('Bitte B2B Partner auswählen!');
     
     setIsBooking(true);
@@ -93,7 +94,7 @@ export function EventDetails() {
         partnerId: source === 'b2b' ? selectedPartnerId : null,
         isB2B: source === 'b2b',
         status: 'confirmed',
-        customerData: { name: customerName, email: customerEmail },
+        customerData: { name: customerName, email: customerEmail, phone: customerPhone },
         totalAmount: calculateTotal(),
         regiondoProductId: event!.regiondoId,
         tickets: selectedSeatIds.map(seatId => {
@@ -207,6 +208,10 @@ export function EventDetails() {
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
               <input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:border-brand-primary focus:ring-1 focus:ring-brand-primary bg-gray-50 focus:bg-white" placeholder="max@beispiel.at" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Telefonnummer</label>
+              <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:border-brand-primary focus:ring-1 focus:ring-brand-primary bg-gray-50 focus:bg-white" placeholder="+43 123 45678" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Buchungsquelle</label>
