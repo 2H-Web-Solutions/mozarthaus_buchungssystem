@@ -49,6 +49,7 @@ export function Events() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventDate, setNewEventDate] = useState('');
+  const [newRegiondoId, setNewRegiondoId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
 
@@ -86,7 +87,8 @@ export function Events() {
       batch.set(doc(db, `apps/${APP_ID}/events`, eventId), {
         title: newEventTitle,
         date: Timestamp.fromDate(dateObj),
-        status: 'active'
+        status: 'active',
+        ...(newRegiondoId ? { regiondoId: newRegiondoId.trim() } : {})
       });
       
       await batch.commit();
@@ -174,6 +176,22 @@ export function Events() {
                <div>
                   <label className="block text-sm text-gray-700 mb-1">Datum & Uhrzeit</label>
                   <input required type="datetime-local" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
+               </div>
+               <div>
+                  <label htmlFor="regiondoId" className="block text-sm text-gray-700 mb-1">
+                    Regiondo Produkt/Event-ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="regiondoId"
+                    value={newRegiondoId}
+                    onChange={e => setNewRegiondoId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                    placeholder="z.B. 123456"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Wird benötigt, um Ticketverkäufe aus Regiondo diesem Event zuzuordnen.
+                  </p>
                </div>
                <div className="flex gap-3 justify-end mt-6">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Abbrechen</button>

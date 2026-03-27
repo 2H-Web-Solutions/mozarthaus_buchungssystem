@@ -15,6 +15,7 @@ export interface Event {
   time?: string;
   status: 'active' | 'completed' | 'cancelled';
   ensemble?: EventEnsembleMember[];
+  regiondoId?: string; // NEU: Mapping-ID für Regiondo Inbound Sync
 }
 
 export interface Seat {

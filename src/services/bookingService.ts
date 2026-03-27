@@ -4,6 +4,7 @@ import { APP_ID } from '../lib/constants';
 import { SEATING_PLAN_TEMPLATE } from '../config/seatingPlan';
 import { Booking, Seat } from '../types/schema';
 import { sendBookingConfirmation } from './firebase/mailService';
+import { triggerN8nOutboundSync } from './n8nService';
 
 const getAppPath = () => `apps/${APP_ID}`;
 
@@ -47,6 +48,8 @@ export async function createBooking(
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
   const seatsColPath = `${getAppPath()}/events/${eventId}/seats`;
 
+  let createdBooking: Booking | null = null;
+
   try {
     await runTransaction(db, async (transaction) => {
       // 1. Read all requested Seat documents
@@ -84,12 +87,19 @@ export async function createBooking(
       
       
       transaction.set(bookingRef, newBooking);
+      createdBooking = newBooking;
     });
     
     // Asynchronous trigger for email confirmation
     sendBookingConfirmation(bookingId).catch(e => {
       console.error('Mail confirmation trigger failed silently: ', e);
     });
+
+    if (createdBooking) {
+      triggerN8nOutboundSync(createdBooking).catch(e => {
+        console.error('n8n sync trigger failed silently: ', e);
+      });
+    }
 
     return bookingId;
   } catch (error) {
@@ -159,6 +169,8 @@ export async function createVariantBooking(bookingData: Omit<Booking, 'id' | 'cr
   const bookingId = `booking_${bookingData.eventId}_${Date.now()}`;
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
 
+  let createdBooking: Booking | null = null;
+
   try {
     await runTransaction(db, async (transaction) => {
        const newBooking: Booking = {
@@ -167,12 +179,19 @@ export async function createVariantBooking(bookingData: Omit<Booking, 'id' | 'cr
          createdAt: Timestamp.now()
        };
        transaction.set(bookingRef, newBooking);
+       createdBooking = newBooking;
     });
 
     // Asynchronous trigger for email confirmation
     sendBookingConfirmation(bookingId).catch(e => {
       console.error('Mail confirmation trigger failed silently: ', e);
     });
+
+    if (createdBooking) {
+      triggerN8nOutboundSync(createdBooking).catch(e => {
+        console.error('n8n sync trigger failed silently: ', e);
+      });
+    }
 
     return bookingId;
   } catch (error) {

@@ -2,7 +2,7 @@ import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking, Seat } from '../types/schema';
-import { notifyN8n } from './n8nService';
+import { triggerN8nOutboundSync } from './n8nService';
 
 const generateBookingId = () => {
   const prefix = 'RES';
@@ -22,6 +22,8 @@ export async function executeBookingTransaction(
   const bookingId = generateBookingId();
   const bookingRef = doc(db, `apps/${APP_ID}/bookings`, bookingId);
   const seatsColPath = `apps/${APP_ID}/events/${bookingData.eventId}/seats`;
+
+  let createdBooking: Booking | null = null;
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -59,10 +61,14 @@ export async function executeBookingTransaction(
         createdAt: Timestamp.now()
       };
       transaction.set(bookingRef, newBooking);
+      createdBooking = newBooking;
     });
 
-    // Emitting reliable outbound webhook event to remote n8n orchestration nodes
-    notifyN8n('booking_created', { bookingId, eventId: bookingData.eventId, tickets: bookingData.tickets });
+    if (createdBooking) {
+      triggerN8nOutboundSync(createdBooking).catch(e => {
+        console.error('n8n sync trigger failed silently: ', e);
+      });
+    }
 
     return bookingId;
   } catch (error) {

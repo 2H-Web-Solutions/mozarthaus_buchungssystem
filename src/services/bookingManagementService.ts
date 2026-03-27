@@ -2,7 +2,7 @@ import { doc, runTransaction, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking } from '../types/schema';
-import { notifyN8n } from './n8nService';
+import { triggerN8nOutboundSync } from './n8nService';
 
 /**
  * Real-time active subscription listener mapped across all standard client Bookings.
@@ -32,6 +32,7 @@ export async function updateBookingStatus(
 ): Promise<void> {
 
   const bookingRef = doc(db, `apps/${APP_ID}/bookings`, bookingId);
+  let updatedBooking: Booking | null = null;
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -68,10 +69,15 @@ export async function updateBookingStatus(
         updates.paymentMethod = paymentMethod;
       }
       transaction.update(bookingRef, updates);
+      updatedBooking = { ...bookingData, ...updates } as Booking;
     });
     
     // Dispatch async webhook representing backend status drift
-    notifyN8n('booking_status_changed', { bookingId, newStatus, paymentMethod });
+    if (updatedBooking) {
+      triggerN8nOutboundSync(updatedBooking).catch(e => {
+        console.error('Failed to trigger n8n sync on status change:', e);
+      });
+    }
     
   } catch (error) {
     console.error('Error shifting transaction state', error);
