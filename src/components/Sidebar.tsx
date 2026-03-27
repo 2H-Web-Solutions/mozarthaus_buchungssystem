@@ -59,6 +59,7 @@ export function Sidebar() {
         { name: 'Partner', path: '/stammdaten/partner' },
         { name: 'Partner Typen', path: '/stammdaten/partner-types' },
         { name: 'Musiker', path: '/stammdaten/musiker' },
+        { name: 'Mitarbeiter', path: '/stammdaten/mitarbeiter' },
         { name: 'Preise & Kategorien', path: '/stammdaten/pricing' }
       ]
     },

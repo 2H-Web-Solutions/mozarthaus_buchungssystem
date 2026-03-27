@@ -3,17 +3,16 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { createMusiker, deleteMusiker, type Musiker as MusikerType } from '../services/firebase/musikerService';
-import { runMusikerImport } from '../utils/importMusikerData';
 import { Plus, User, Trash2, Edit2 } from 'lucide-react';
 
-export function Musiker() {
+export function Mitarbeiter() {
   const [musikerList, setMusikerList] = useState<MusikerType[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form State
-  const [art, setArt] = useState('Musiker');
+  const [art, setArt] = useState('Mitarbeiter');
   const [instrument, setInstrument] = useState('');
   const [nachname, setNachname] = useState('');
   const [vorname, setVorname] = useState('');
@@ -30,7 +29,7 @@ export function Musiker() {
       const list: MusikerType[] = [];
       snap.forEach(d => {
         const data = d.data();
-        if (data.art === 'Musiker') {
+        if (data.art === 'Mitarbeiter' || data.art === 'Dienstleister') {
           list.push({ id: d.id, ...data } as MusikerType);
         }
       });
@@ -43,7 +42,7 @@ export function Musiker() {
 
   const resetForm = () => {
     setEditingId(null);
-    setArt('Musiker');
+    setArt('Mitarbeiter');
     setInstrument('');
     setNachname('');
     setVorname('');
@@ -82,8 +81,6 @@ export function Musiker() {
     if (!nachname || !vorname) return;
 
     setIsSaving(true);
-    // Wenn kein editingId vorhanden ist, erstelle eine neue ID basierend auf dem Namen
-    // Oder nutze eine zufällige ID, wenn slug nicht gewünscht
     const id = editingId || `${nachname.toLowerCase()}-${vorname.toLowerCase()}`.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
 
     try {
@@ -122,23 +119,8 @@ export function Musiker() {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-heading text-brand-primary">Musiker</h1>
+        <h1 className="text-2xl font-heading text-brand-primary">Mitarbeiter & Dienstleister</h1>
         <div className="flex items-center gap-3">
-          <button
-            onClick={async () => {
-              if (!window.confirm('Achtung: Sollen die Rohdaten in die Datenbank importiert werden?')) return;
-              try {
-                await runMusikerImport();
-                alert('Import abgeschlossen!');
-              } catch (err) {
-                console.error(err);
-                alert('Import fehlgeschlagen!');
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold"
-          >
-            DEV: Bulk Import
-          </button>
           <button 
             onClick={openNewModal}
             className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition"
@@ -195,12 +177,17 @@ export function Musiker() {
                {editingId ? 'Eintrag bearbeiten' : 'Neu anlegen'}
              </h2>
              <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Art (Hidden, force Musiker) */}
-                <input type="hidden" value={art} />
+               <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Art</label>
+                  <select value={art} onChange={e => setArt(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary">
+                    <option value="Mitarbeiter">Mitarbeiter</option>
+                    <option value="Dienstleister">Dienstleister</option>
+                  </select>
+               </div>
                
                <div className="col-span-1 md:col-span-2">
                   <label className="block text-sm text-gray-700 mb-1">Instrument / Rolle</label>
-                  <input type="text" value={instrument} onChange={e => setInstrument(e.target.value)} placeholder="z.B. 1. Violine, Dirigent..." className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
+                  <input type="text" value={instrument} onChange={e => setInstrument(e.target.value)} placeholder="z.B. Kassierer, Reinigung..." className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
                </div>
 
                <div>

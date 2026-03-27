@@ -11,6 +11,7 @@ import { Kanban } from './pages/Kanban';
 import { Partners } from './pages/Partners';
 import { PartnerTypes } from './pages/PartnerTypes';
 import { Musiker } from './pages/Musiker';
+import { Mitarbeiter } from './pages/Mitarbeiter';
 import { PricingCategories } from './pages/PricingCategories';
 import { HonorarnotePrint } from './pages/events/HonorarnotePrint';
 import { BookingFlow } from './components/booking/BookingFlow';
@@ -42,6 +43,7 @@ function App() {
           <Route path="stammdaten/partner" element={<Partners />} />
           <Route path="stammdaten/partner-types" element={<PartnerTypes />} />
           <Route path="stammdaten/musiker" element={<Musiker />} />
+          <Route path="stammdaten/mitarbeiter" element={<Mitarbeiter />} />
           <Route path="stammdaten/pricing" element={<PricingCategories />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="settings" element={<Settings />} />
