@@ -60,8 +60,24 @@ export async function executeBookingTransaction(
         seatIds: (bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') ? selectedSeatIds : [],
         createdAt: Timestamp.now()
       };
-      transaction.set(bookingRef, newBooking);
-      createdBooking = newBooking;
+
+      // Firestore erlaubt keine "undefined" Werte.
+      // Wir entfernen alle undefined-Felder rekursiv aus dem Objekt.
+      const sanitizeForFirestore = (obj: any): any => {
+        if (obj === null || typeof obj !== 'object' || obj instanceof Timestamp) return obj;
+        if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+        const result: any = {};
+        for (const key in obj) {
+          if (obj[key] !== undefined) {
+            result[key] = sanitizeForFirestore(obj[key]);
+          }
+        }
+        return result;
+      };
+
+      const sanitizedBooking = sanitizeForFirestore(newBooking);
+      transaction.set(bookingRef, sanitizedBooking);
+      createdBooking = sanitizedBooking; // Für n8n
     });
 
     if (createdBooking) {
