@@ -151,7 +151,7 @@ export function BookingFlow() {
     try {
       const tickets = bookingType === 'einzel' ? categories
         .filter(c => (quantities[c.id] || 0) > 0)
-        .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
+        .map(c => ({ categoryId: c.id, quantity: quantities[c.id], regiondoOptionId: c.regiondoOptionId })) : [];
 
       const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
 
@@ -198,7 +198,8 @@ export function BookingFlow() {
         customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
         tickets,
         customerData: { name: customerName, email: customerEmail },
-        totalAmount: totalPrice
+        totalAmount: totalPrice,
+        regiondoProductId: selectedEvent?.regiondoId
       }, (bookingType === 'einzel' || bookingType === 'gruppe') ? selectedSeats : []);
       
       setSuccess(true);

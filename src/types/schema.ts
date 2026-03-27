@@ -15,7 +15,7 @@ export interface Event {
   time?: string;
   status: 'active' | 'completed' | 'cancelled';
   ensemble?: EventEnsembleMember[];
-  regiondoId?: string; // NEU: Mapping-ID für Regiondo Inbound Sync
+  regiondoId?: string | number; // NEU: Mapping-ID für Regiondo Inbound Sync
 }
 
 export interface Seat {
@@ -37,7 +37,7 @@ export interface Booking {
   status: 'confirmed' | 'cancelled' | 'pending' | 'paid';
   paymentMethod?: 'bar' | 'karte' | 'voucher' | 'rechnung';
   seatIds?: string[];
-  tickets?: { seatId?: string, categoryId: string, quantity?: number, price?: number }[];
+  tickets?: { seatId?: string, categoryId: string, quantity?: number, price?: number, regiondoOptionId?: string | number }[];
   checkedInSeats?: string[]; // Specifically for Abendkasse per-seat tracking
   customerData: {
     name: string;
@@ -46,6 +46,7 @@ export interface Booking {
   eventDate?: string;
   eventTitle?: string;
   totalAmount: number;
+  regiondoProductId?: string | number; // NEU: Die Event-ID für Regiondo
   
   // Neue Felder für Buchungsvarianten
   bookingType?: 'einzel' | 'gruppe' | 'privat';
@@ -83,4 +84,5 @@ export interface TicketCategory {
   colorCode: string; // Hex color
   isActive: boolean;
   description?: string;
+  regiondoOptionId?: string | number; // NEU: Die Option-ID für Regiondo
 }

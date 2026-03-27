@@ -95,13 +95,16 @@ export function EventDetails() {
         status: 'confirmed',
         customerData: { name: customerName, email: customerEmail },
         totalAmount: calculateTotal(),
+        regiondoProductId: event!.regiondoId,
         tickets: selectedSeatIds.map(seatId => {
           const fallbackId = ticketCategories.length > 0 ? ticketCategories[0].id : '';
           const catId = seatCategories[seatId] || fallbackId;
+          const category = ticketCategories.find(c => c.id === catId);
           return {
             seatId,
             categoryId: catId,
-            price: ticketCategories.find(c => c.id === catId)?.price || 0
+            price: category?.price || 0,
+            regiondoOptionId: category?.regiondoOptionId
           };
         })
       });
