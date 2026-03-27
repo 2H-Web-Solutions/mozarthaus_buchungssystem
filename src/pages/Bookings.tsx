@@ -46,8 +46,10 @@ export function Bookings() {
   };
 
   const filteredBookings = bookings.filter(b => {
-    const matchSearch = b.customerData.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        b.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const customerName = b.customerData?.name || '';
+    const bookingId = b.id || '';
+    const matchSearch = customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        bookingId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchSource = filterSource === 'all' || b.source === filterSource;
     const matchStatus = filterStatus === 'all' || b.status === filterStatus;
     return matchSearch && matchSource && matchStatus;
@@ -113,8 +115,8 @@ export function Bookings() {
                    <div className="text-xs text-brand-primary mt-1">{b.eventId}</div>
                  </td>
                  <td className="p-4">
-                   <div className="font-medium">{b.customerData.name}</div>
-                   <div className="text-gray-500">{b.customerData.email}</div>
+                   <div className="font-medium">{b.customerData?.name || 'Unbekannt'}</div>
+                   <div className="text-gray-500">{b.customerData?.email || '-'}</div>
                    {/* NEU: Zusätzliche Infos für Gruppenbuchungen */}
                    {b.bookingType === 'gruppe' && (
                      <div className="text-xs text-blue-600 mt-1 font-medium">
@@ -153,7 +155,7 @@ export function Bookings() {
                  <td className="p-4">
                    <div className="mb-1 flex flex-wrap gap-1">
                      <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                       {b.source.toUpperCase()}
+                       {b.source ? b.source.toUpperCase() : 'UNKNOWN'}
                      </span>
                      {/* NEU: Badge für den Buchungstyp */}
                      {b.bookingType && (
@@ -168,7 +170,7 @@ export function Bookings() {
                    </div>
                    <div>
                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                       {b.status.toUpperCase()}
+                       {b.status ? b.status.toUpperCase() : 'IMPORTED'}
                      </span>
                    </div>
                  </td>
