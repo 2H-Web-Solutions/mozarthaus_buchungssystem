@@ -146,9 +146,9 @@ export function Dashboard() {
               ) : recentEvents.map(e => (
                 <li key={e.id} className="p-4 hover:bg-gray-50 flex justify-between items-center transition-colors">
                   <div>
-                    <p className="font-bold text-gray-900">{e.title}</p>
+                    <p className="font-bold text-gray-900">{e.title || 'Ohne Titel'}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date((e.date as any)?.toDate ? (e.date as any).toDate() : e.date).toLocaleDateString('de-AT', { day: '2-digit', month: 'short' })} • {e.time}
+                      {e.date ? new Date((e.date as any)?.toDate ? (e.date as any).toDate() : e.date).toLocaleDateString('de-AT', { day: '2-digit', month: 'short' }) : 'Kein Datum'} {e.time ? `• ${e.time}` : ''}
                     </p>
                   </div>
                   <button 

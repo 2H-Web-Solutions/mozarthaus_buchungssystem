@@ -58,8 +58,8 @@ export function Events() {
       const evts: Event[] = [];
       snap.forEach(d => evts.push({ id: d.id, ...d.data() } as Event));
       evts.sort((a,b) => {
-        const timeA = (a.date as any)?.toMillis ? (a.date as any).toMillis() : new Date(a.date as string).getTime();
-        const timeB = (b.date as any)?.toMillis ? (b.date as any).toMillis() : new Date(b.date as string).getTime();
+        const timeA = (a.date as any)?.toMillis ? (a.date as any).toMillis() : (a.date ? new Date(a.date as string).getTime() : 0);
+        const timeB = (b.date as any)?.toMillis ? (b.date as any).toMillis() : (b.date ? new Date(b.date as string).getTime() : 0);
         return timeA - timeB;
       });
       setEvents(evts);
@@ -134,16 +134,18 @@ export function Events() {
               ) : events.map(evt => (
                <tr key={evt.id} className="hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => navigate(`/events/${evt.id}`)}>
                  <td className="p-4 whitespace-nowrap">
-                   {evt.time && typeof evt.date !== 'string' && (evt.date as any)?.toDate 
-                     ? `${(evt.date as any).toDate().toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric'})}, ${evt.time}` 
-                     : (evt.date as any)?.toDate 
-                       ? (evt.date as any).toDate().toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit' }) 
-                       : `${evt.date} ${evt.time || ''}`}
+                   {!evt.date ? <span className="text-red-500 font-bold">FEHLT</span> : (
+                     evt.time && typeof evt.date !== 'string' && (evt.date as any)?.toDate 
+                       ? `${(evt.date as any).toDate().toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric'})}, ${evt.time}` 
+                       : (evt.date as any)?.toDate 
+                         ? (evt.date as any).toDate().toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit' }) 
+                         : `${evt.date} ${evt.time || ''}`
+                   )}
                  </td>
-                 <td className="p-4 font-medium text-gray-900">{evt.title}</td>
+                 <td className="p-4 font-medium text-gray-900">{evt.title || 'Ohne Titel'}</td>
                  <td className="p-4">
                    <span className={`px-2 py-1 text-xs rounded-full ${evt.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                     {evt.status.toUpperCase()}
+                     {evt.status ? evt.status.toUpperCase() : 'IMPORTED'}
                    </span>
                  </td>
                  <td className="p-4">
