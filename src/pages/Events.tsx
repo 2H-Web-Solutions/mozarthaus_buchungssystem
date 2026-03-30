@@ -5,7 +5,8 @@ import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
 import { BulkEventGenerator } from '../components/BulkEventGenerator';
-import { CalendarPlus, RefreshCw, Trash2, CloudDownload, X } from 'lucide-react';
+import { RegiondoSyncModal } from '../components/events/RegiondoSyncModal';
+import { CalendarPlus, RefreshCw, Trash2, CloudDownload } from 'lucide-react';
 import { syncMissingEvents } from '../utils/syncEventsFromBookings';
 import { deleteAllEvents } from '../utils/deleteAllEvents';
 import { initializeEventSeats } from '../services/bookingService';
@@ -78,38 +79,6 @@ export function Events() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [isRegiondoSyncModalOpen, setIsRegiondoSyncModalOpen] = useState(false);
-  const [regiondoStartDate, setRegiondoStartDate] = useState('');
-  const [regiondoEndDate, setRegiondoEndDate] = useState('');
-  const [isRegiondoSyncing, setIsRegiondoSyncing] = useState(false);
-
-  const handleRegiondoSync = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regiondoStartDate || !regiondoEndDate) return;
-    
-    setIsRegiondoSyncing(true);
-    try {
-      const response = await fetch('https://[DEINE_N8N_URL]/webhook/regiondo-fetch-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startDate: regiondoStartDate,
-          endDate: regiondoEndDate,
-        }),
-      });
-      
-      if (!response.ok) throw new Error('API Fehler');
-      
-      alert('Synchronisierung gestartet! Der n8n-Workflow importiert nun die Events im Hintergrund.');
-      setIsRegiondoSyncModalOpen(false);
-      setRegiondoStartDate('');
-      setRegiondoEndDate('');
-    } catch (error) {
-      console.error(error);
-      alert('Fehler beim Aufrufen des n8n Webhooks. Hast du den Platzhalter [DEINE_N8N_URL] im Code angepasst?');
-    } finally {
-      setIsRegiondoSyncing(false);
-    }
-  };
 
   const handleDeleteAll = async () => {
     const confirm1 = window.confirm('ACHTUNG: Möchtest du wirklich ALLE Events und Sitzpläne löschen? (Buchungen bleiben erhalten)');
@@ -324,43 +293,10 @@ export function Events() {
         </div>
       )}
 
-      {/* Regiondo Sync Modal */}
-      {isRegiondoSyncModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-heading text-brand-primary">Regiondo Sync</h2>
-              <button onClick={() => setIsRegiondoSyncModalOpen(false)} className="text-gray-500 hover:text-gray-700">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleRegiondoSync} className="space-y-4">
-              <p className="text-sm text-gray-600 mb-4">
-                Wähle den Zeitraum aus, für den leere Regiondo-Termine in Firebase importiert werden sollen.
-              </p>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Startdatum</label>
-                  <input required type="date" value={regiondoStartDate} onChange={(e) => setRegiondoStartDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Enddatum</label>
-                  <input required type="date" value={regiondoEndDate} onChange={(e) => setRegiondoEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none" />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsRegiondoSyncModalOpen(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded transition-colors">Abbrechen</button>
-                <button disabled={isRegiondoSyncing} type="submit" className="px-4 py-2 bg-brand-primary text-white rounded hover:bg-opacity-90 transition-colors disabled:opacity-50">
-                  {isRegiondoSyncing ? 'Starte Sync...' : 'Synchronisieren'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <RegiondoSyncModal 
+        isOpen={isRegiondoSyncModalOpen} 
+        onClose={() => setIsRegiondoSyncModalOpen(false)} 
+      />
     </div>
   );
 }
