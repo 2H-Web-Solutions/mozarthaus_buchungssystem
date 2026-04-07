@@ -1,8 +1,6 @@
-import { collection, getDocs, doc, writeBatch, Timestamp, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, Timestamp, deleteDoc, getFirestore } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
 import * as dotenv from 'dotenv';
-import { join } from 'path';
 
 // Load env vars
 dotenv.config({ path: '.env.local' });
