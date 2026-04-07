@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, doc, writeBatch, Timestamp, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, writeBatch, Timestamp, query, where, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, getCountFromServer } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
@@ -10,6 +10,7 @@ import { CalendarPlus, RefreshCw, Trash2, CloudDownload } from 'lucide-react';
 import { syncMissingEvents } from '../utils/syncEventsFromBookings';
 import { deleteAllEvents } from '../utils/deleteAllEvents';
 import { initializeEventSeats } from '../services/bookingService';
+import { resetEventsFromRegiondo } from '../services/regiondoFetchService';
 
 function EventOccupancy({ eventId }: { eventId: string }) {
   const [occupancy, setOccupancy] = useState({ booked: 0, total: 0 });
@@ -69,6 +70,13 @@ function EventOccupancy({ eventId }: { eventId: string }) {
 
 export function Events() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [docHistory, setDocHistory] = useState<QueryDocumentSnapshot[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const PAGE_SIZE = 10;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventDate, setNewEventDate] = useState('');
@@ -79,6 +87,76 @@ export function Events() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [isRegiondoSyncModalOpen, setIsRegiondoSyncModalOpen] = useState(false);
+  const [isWipingAndSyncing, setIsWipingAndSyncing] = useState(false);
+
+  const fetchTotalCount = async () => {
+    const coll = collection(db, `apps/${APP_ID}/events`);
+    const snapshot = await getCountFromServer(coll);
+    setTotalEvents(snapshot.data().count);
+  };
+
+  const fetchEvents = async (direction: 'initial' | 'next' | 'prev' = 'initial') => {
+    setIsLoading(true);
+    try {
+      let q = query(
+        collection(db, `apps/${APP_ID}/events`),
+        orderBy('date', 'asc'),
+        limit(PAGE_SIZE)
+      );
+
+      if (direction === 'next' && lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      } else if (direction === 'prev') {
+        const prevDoc = docHistory[docHistory.length - 2] || null;
+        if (prevDoc) {
+          q = query(q, startAfter(prevDoc));
+        }
+      }
+
+      const snap = await getDocs(q);
+      const evts: Event[] = [];
+      snap.forEach(d => evts.push({ id: d.id, ...d.data() } as Event));
+      
+      setEvents(evts);
+      setLastDoc(snap.docs[snap.docs.length - 1]);
+      
+      if (direction === 'next') {
+        setDocHistory([...docHistory, snap.docs[snap.docs.length - 1]]);
+        setCurrentPage(prev => prev + 1);
+      } else if (direction === 'prev') {
+        setDocHistory(docHistory.slice(0, -1));
+        setCurrentPage(prev => prev - 1);
+      } else {
+        setDocHistory([snap.docs[snap.docs.length - 1]]);
+        setCurrentPage(1);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+    fetchTotalCount();
+  }, []);
+
+  const handleWipeAndSync = async () => {
+    if (!window.confirm('Vorsicht: Alle aktuellen Events werden gelöscht und neu importiert! Fortfahren?')) return;
+    
+    setIsWipingAndSyncing(true);
+    try {
+      const count = await resetEventsFromRegiondo();
+      alert(`Erfolg: ${count} Events wurden neu angelegt!`);
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      alert('Fehler beim Zurücksetzen der Events.');
+    } finally {
+      setIsWipingAndSyncing(false);
+    }
+  };
 
   const handleDeleteAll = async () => {
     const confirm1 = window.confirm('ACHTUNG: Möchtest du wirklich ALLE Events und Sitzpläne löschen? (Buchungen bleiben erhalten)');
@@ -114,19 +192,7 @@ export function Events() {
     }
   };
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, `apps/${APP_ID}/events`), snap => {
-      const evts: Event[] = [];
-      snap.forEach(d => evts.push({ id: d.id, ...d.data() } as Event));
-      evts.sort((a,b) => {
-        const timeA = (a.date as any)?.toMillis ? (a.date as any).toMillis() : (a.date ? new Date(a.date as string).getTime() : 0);
-        const timeB = (b.date as any)?.toMillis ? (b.date as any).toMillis() : (b.date ? new Date(b.date as string).getTime() : 0);
-        return timeA - timeB;
-      });
-      setEvents(evts);
-    });
-    return () => unsub();
-  }, []);
+
 
   const createEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,6 +251,14 @@ export function Events() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
           >
             <CloudDownload className="w-5 h-5"/> Regiondo Termine synchronisieren
+          </button>
+          <button 
+            onClick={handleWipeAndSync}
+            disabled={isWipingAndSyncing}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${isWipingAndSyncing ? 'animate-spin' : ''}`}/> 
+            {isWipingAndSyncing ? 'Wipe & Sync läuft...' : 'Wipe & Sync from API'}
           </button>
           <BulkEventGenerator onComplete={() => {}} />
           <button 
@@ -252,6 +326,59 @@ export function Events() {
           </tbody>
         </table>
       </div>
+
+      {!isLoading && events.length > 0 && (
+        <div className="mt-6 flex items-center justify-between bg-white px-4 py-3 sm:px-6 rounded-lg border border-gray-200 shadow-sm">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <button
+              onClick={() => fetchEvents('prev')}
+              disabled={currentPage === 1 || isLoading}
+              className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Zurück
+            </button>
+            <button
+              onClick={() => fetchEvents('next')}
+              disabled={events.length < PAGE_SIZE || isLoading}
+              className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Weiter
+            </button>
+          </div>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Zeige <span className="font-medium">{(currentPage - 1) * PAGE_SIZE + 1}</span> bis{' '}
+                <span className="font-medium">{(currentPage - 1) * PAGE_SIZE + events.length}</span> von{' '}
+                <span className="font-medium">{totalEvents}</span> Events
+              </p>
+            </div>
+            <div>
+              <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                <button
+                  onClick={() => fetchEvents('prev')}
+                  disabled={currentPage === 1 || isLoading}
+                  className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                >
+                  <span className="sr-only">Zurück</span>
+                  &larr;
+                </button>
+                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 focus:z-20 focus:outline-offset-0">
+                  Seite {currentPage}
+                </span>
+                <button
+                  onClick={() => fetchEvents('next')}
+                  disabled={events.length < PAGE_SIZE || isLoading}
+                  className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                >
+                  <span className="sr-only">Weiter</span>
+                  &rarr;
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
