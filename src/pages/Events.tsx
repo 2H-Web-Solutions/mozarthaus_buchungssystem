@@ -4,7 +4,6 @@ import { collection, onSnapshot, doc, query, where, orderBy, limit, getDocs, sta
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
-import { initializeEventSeats } from '../services/bookingService';
 
 function EventOccupancy({ eventId }: { eventId: string }) {
   const [data, setData] = useState({

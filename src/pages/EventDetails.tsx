@@ -95,8 +95,7 @@ export function EventDetails() {
         isB2B: source === 'b2b',
         status: 'confirmed',
         customerData: { name: customerName, email: customerEmail, phone: customerPhone },
-        totalAmount: calculateTotal(),
-            price: category?.price || 0
+        totalAmount: calculateTotal()
       });
       // Clear cart
       setCustomerName('');

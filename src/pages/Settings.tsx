@@ -3,7 +3,6 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { ImageUploader } from '../components/ImageUploader';
-import { CopyableField } from '../components/CopyableField';
 import { DataSeeder } from '../components/admin/DataSeeder';
 
 export function Settings() {

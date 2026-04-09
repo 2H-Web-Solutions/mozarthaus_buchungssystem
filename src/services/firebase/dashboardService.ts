@@ -1,4 +1,4 @@
-import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { Event, Booking } from '../../types/schema';
@@ -77,8 +77,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const monthSnap = await getDocs(currentMonthBookingsQuery);
   const revenue = monthSnap.docs.reduce((sum, doc) => {
-    const b = doc.data() as Booking;
-    const display = getBookingDisplayData({ id: doc.id, ...b } as Booking);
+    const b = { ...doc.data(), id: doc.id } as Booking;
+    const display = getBookingDisplayData(b);
     
     // Use the mapped status and amount
     if (display.status === 'paid' || display.status.includes('paid') || display.status === 'confirmed') {
