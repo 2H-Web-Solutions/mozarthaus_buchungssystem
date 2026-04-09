@@ -8,5 +8,27 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- 2H Markup Integration (Pfad-Erkennung) -->
+    <script>
+    (function() {
+      // Führt den Code nur aus, wenn die App im "2H Markup Tool" Iframe läuft
+      if (window.parent !== window) {
+        let lastPath = window.location.pathname + window.location.search;
+        // Sendet den initialen Pfad beim ersten Laden
+        window.parent.postMessage({ type: 'MARKUP_PATH_CHANGE', path: lastPath }, '*');
+        
+        // Überwacht geräuschlos alle 500 Millisekunden auf SPA-Seitenwechsel
+        setInterval(function() {
+          var currentPath = window.location.pathname + window.location.search;
+          if (currentPath !== lastPath) {
+            lastPath = currentPath;
+            window.parent.postMessage({ type: 'MARKUP_PATH_CHANGE', path: currentPath }, '*');
+          }
+        }, 500);
+      }
+    })();
+    </script>
+    <!-- /2H Markup Integration -->
   </body>
 </html>
