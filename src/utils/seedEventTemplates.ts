@@ -1,17 +1,16 @@
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
-import { RegiondoEventBlueprint } from '../types/event';
 
 /**
- * Initializes the static Regiondo master data into the base Firestore schema.
+ * Initializes the base event master data into the base Firestore schema.
  * Target collection: apps/[APP_ID]/event_templates
  */
-export async function seedRegiondoEvents() {
+export async function seedBaseEventTemplates() {
   const blueprintId = 'mozart_ensemble';
   const docRef = doc(db, `apps/${APP_ID}/event_templates`, blueprintId);
 
-  const data: RegiondoEventBlueprint = {
+  const data = {
     id: blueprintId,
     title: 'Mozart Ensemble',
     shortDescription: 'Erleben Sie einen unvergesslichen Abend mit klassischer Musik auf höchstem Niveau! Wählen Sie zwischen einem stilechten Streichquartett oder einem topbesetzten Klaviertrio.',

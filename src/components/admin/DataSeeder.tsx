@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { seedRegiondoEvents } from '../../utils/seedRegiondoData';
+import { seedBaseEventTemplates } from '../../utils/seedEventTemplates';
 import { Database, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export function DataSeeder() {
@@ -8,11 +8,11 @@ export function DataSeeder() {
 
   const handleSeed = async () => {
     setStatus('loading');
-    setMessage('Synchronisiere Regiondo Basisdaten...');
+    setMessage('Initialisiere Basisdaten...');
     try {
-      await seedRegiondoEvents();
+      await seedBaseEventTemplates();
       setStatus('success');
-      setMessage('Regiondo Daten erfolgreich in Firestore (event_templates) angelegt!');
+      setMessage('Basisdaten (Templates) erfolgreich angelegt!');
       
       setTimeout(() => {
         setStatus('idle');
@@ -31,10 +31,10 @@ export function DataSeeder() {
         <div>
           <h3 className="text-lg font-bold text-gray-900 font-heading flex items-center gap-2">
             <Database className="w-5 h-5 text-gray-400" />
-            Regiondo Datenmodell synchronisieren
+            Basisdaten / Templates initialisieren
           </h3>
           <p className="text-sm text-gray-500 mt-1 max-w-xl">
-            Importiert das statische Regiondo-Produktdatenmodell (Mozart Ensemble, Streichquartett, Preise, Varianten) über einen Seed-Vorgang fest in die FireStore Datenbank des aktiven App-Clients.
+            Importiert die Standard-Eventvorlagen (z.B. Mozart Ensemble, Streichquartett, Preise) als Templates in die Datenbank.
           </p>
         </div>
         <button

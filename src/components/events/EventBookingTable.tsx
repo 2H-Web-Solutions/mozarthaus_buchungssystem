@@ -4,6 +4,7 @@ import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { sendBookingConfirmation } from '../../services/firebase/mailService';
+import { getBookingDisplayData } from '../../utils/bookingMapper';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -21,6 +22,7 @@ interface FlattenedTicket {
   amount: number;
   paymentMethod: string;
   info: string;
+  quantity: number;
   createdAt: Date;
   isCheckedIn: boolean;
 }
@@ -31,17 +33,15 @@ export function EventBookingTable({ bookings }: Props) {
   const flattenedTickets: FlattenedTicket[] = [];
   
   bookings.forEach(booking => {
-     if (booking.status === 'cancelled') return; // Skip cancelled bookings or show them? Often excluded in pure occupancy view
+     if (booking.status === 'cancelled') return;
      
+     const display = getBookingDisplayData(booking);
      const createdDate = (booking.createdAt as any)?.toDate ? (booking.createdAt as any).toDate() : new Date(booking.createdAt as any);
      
-     // Determine per-ticket price roughly if there are multiple tickets but we don't have accurate mapping
-     const totalSeats = booking.seatIds ? booking.seatIds.length : (booking.tickets?.length || 1);
-     const amountPerSeat = booking.totalAmount / totalSeats;
-     
+     // 1. Case: Specific Seats Assigned
      if (booking.seatIds && booking.seatIds.length > 0) {
+        const amountPerSeat = display.totalAmount / booking.seatIds.length;
         booking.seatIds.forEach((seatId: string) => {
-           // seatId generic format assumed: 'row_a_seat_1'
            const match = seatId.match(/row_([a-z]+)_seat_(\d+)/i);
            const rowName = match ? match[1].toUpperCase() : '-';
            const seatNumber = match ? match[2] : '-';
@@ -51,36 +51,62 @@ export function EventBookingTable({ bookings }: Props) {
              bookingId: booking.id,
              row: rowName,
              seatNumber: seatNumber,
-             customerName: booking.customerData.name,
-             source: booking.source,
+             customerName: display.customerName,
+             source: display.sourceLabel,
              paymentStatus: booking.status,
              amount: amountPerSeat,
-             paymentMethod: booking.paymentMethod || '-',
-             info: booking.isB2B ? 'B2B Partner Buchung' : '',
+             paymentMethod: display.paymentMethod,
+             info: booking.isB2B ? 'B2B Partner' : (display.categoryPayloadName || ''),
+             quantity: display.quantity,
              createdAt: createdDate,
              isCheckedIn: (booking.checkedInSeats || []).includes(seatId)
            });
         });
-     } else if (booking.tickets && booking.tickets.length > 0) {
-        // Fallback for bookings without specific seatIds (e.g., manual count tickets)
+     } 
+     // 2. Case: Internal Ticket Categories (no seats)
+     else if (booking.tickets && booking.tickets.length > 0) {
         booking.tickets.forEach((t: any, i: number) => {
-           for (let q = 0; q < (t.quantity || 1); q++) {
-               flattenedTickets.push({
-                 id: `${booking.id}-t${i}-q${q}`,
-                 bookingId: booking.id,
-                 row: '-',
-                 seatNumber: '-',
-                 customerName: booking.customerData.name,
-                 source: booking.source,
-                 paymentStatus: booking.status,
-                 amount: t.price || amountPerSeat,
-                 paymentMethod: booking.paymentMethod || '-',
-                 info: `Kategorie: ${t.categoryId}`,
-                 createdAt: createdDate,
-                 isCheckedIn: (booking.checkedInSeats || []).includes(`${booking.id}-t${i}-q${q}`)
-               });
-           }
+            const qty = t.quantity || 1;
+            for (let q = 0; q < qty; q++) {
+                flattenedTickets.push({
+                  id: `${booking.id}-t${i}-q${q}`,
+                  bookingId: booking.id,
+                  row: '-',
+                  seatNumber: '-',
+                  customerName: display.customerName,
+                  source: display.sourceLabel,
+                  paymentStatus: booking.status,
+                  amount: t.price || (display.totalAmount / qty),
+                  paymentMethod: display.paymentMethod,
+                  info: `Category: ${t.categoryName || t.categoryId}`,
+                  quantity: display.quantity,
+                  createdAt: createdDate,
+                  isCheckedIn: (booking.checkedInSeats || []).includes(`${booking.id}-t${i}-q${q}`)
+                });
+            }
         });
+     }
+     // 3. Fallback: Generic Quantity (Synced bookings without seat/ticket structure yet)
+     else {
+        const qty = booking.groupPersons || (booking.lastPayload as any)?.qty || 1;
+        const amountPerTicket = display.totalAmount / qty;
+        for (let q = 0; q < qty; q++) {
+            flattenedTickets.push({
+              id: `${booking.id}-fallback-q${q}`,
+              bookingId: booking.id,
+              row: '-',
+              seatNumber: '-',
+              customerName: display.customerName,
+              source: display.sourceLabel,
+              paymentStatus: booking.status,
+              amount: amountPerTicket,
+              paymentMethod: display.paymentMethod,
+              info: display.categoryPayloadName || 'Confirmed Ticket',
+              quantity: display.quantity,
+              createdAt: createdDate,
+              isCheckedIn: (booking.checkedInSeats || []).includes(`${booking.id}-fallback-q${q}`)
+            });
+        }
      }
   });
 
@@ -118,27 +144,28 @@ export function EventBookingTable({ bookings }: Props) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-gray-400">
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:bg-white print:border-b-2 print:border-black">
-        <h3 className="font-bold text-gray-900 print:text-xl">Gebuchte Plätze ({flattenedTickets.length})</h3>
+        <h3 className="font-bold text-gray-900 print:text-xl uppercase tracking-wider text-xs">Booked seats ({flattenedTickets.length})</h3>
       </div>
       <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full text-left text-sm whitespace-nowrap print:text-black">
           <thead className="bg-white">
-            <tr className="text-gray-500 font-bold uppercase tracking-wider border-b border-gray-200 text-xs print:text-black print:border-black">
-              <th className="p-4 w-12 text-center border-r border-gray-100 print:border-black">Check-In</th>
-              <th className="p-4 w-16 text-center border-r border-gray-100 print:border-black">Reihe</th>
-              <th className="p-4 w-16 text-center border-r border-gray-100 print:border-black">Platz</th>
-              <th className="p-4 border-r border-gray-100 print:border-black">Name</th>
-              <th className="p-4 border-r border-gray-100 print:border-black print:hidden">Verkäufer</th>
-              <th className="p-4 border-r border-gray-100 print:border-black">Zahlstatus</th>
-              <th className="p-4 text-right border-r border-gray-100 print:border-black print:hidden">Betrag</th>
-              <th className="p-4 border-r border-gray-100 print:border-black print:hidden">Zahlart</th>
-              <th className="p-4 print:border-black">Information</th>
+            <tr className="text-gray-400 font-bold uppercase tracking-widest border-b border-gray-200 text-[10px] print:text-black print:border-black">
+              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-black">Check-In</th>
+              <th className="p-4 w-16 text-center border-r border-gray-50 print:border-black">Row</th>
+              <th className="p-4 w-16 text-center border-r border-gray-50 print:border-black">Place</th>
+              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-black">Qty</th>
+              <th className="p-4 border-r border-gray-50 print:border-black">Name</th>
+              <th className="p-4 border-r border-gray-50 print:border-black print:hidden">Salesperson</th>
+              <th className="p-4 border-r border-gray-50 print:border-black">Payment Status</th>
+              <th className="p-4 text-right border-r border-gray-50 print:border-black print:hidden">Amount</th>
+              <th className="p-4 border-r border-gray-50 print:border-black print:hidden">Payment Method</th>
+              <th className="p-4 print:border-black">Kategorie</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 print:divide-black/20">
+          <tbody className="divide-y divide-gray-50 print:divide-black/20">
             {flattenedTickets.length === 0 ? (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-gray-500 font-medium">Bisher keine Plätze gebucht.</td>
+                <td colSpan={10} className="p-12 text-center text-gray-400 font-medium italic">Keine Teilnehmer in der Liste vorhanden.</td>
               </tr>
             ) : (
               flattenedTickets.map(ticket => (
@@ -160,6 +187,7 @@ export function EventBookingTable({ bookings }: Props) {
                   </td>
                   <td className="p-4 text-center font-bold text-gray-900 border-r border-gray-100 print:border-black">{ticket.row}</td>
                   <td className="p-4 text-center font-bold text-gray-900 border-r border-gray-100 print:border-black">{ticket.seatNumber}</td>
+                  <td className="p-4 text-center font-bold text-brand-red border-r border-gray-100 print:border-black">{ticket.quantity}</td>
                   <td className={`p-4 font-bold ${ticket.isCheckedIn ? 'text-gray-500' : 'text-gray-800'} border-r border-gray-100 print:border-black`}>
                     {ticket.customerName}
                   </td>
@@ -170,16 +198,16 @@ export function EventBookingTable({ bookings }: Props) {
                   </td>
                   <td className="p-4 border-r border-gray-100 print:border-black">
                     {ticket.paymentStatus === 'paid' ? (
-                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-green-700 bg-green-50 border border-green-200 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <CheckCircle2 className="w-3.5 h-3.5 print:hidden" /> Bezahlt
+                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-green-700 bg-green-50 border border-green-100 print:border-none print:p-0 print:text-black print:bg-transparent">
+                         <CheckCircle2 className="w-3 h-3 print:hidden" /> Paid
                        </span>
-                    ) : ticket.paymentStatus === 'confirmed' ? (
-                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <CheckCircle2 className="w-3.5 h-3.5 print:hidden" /> Bestätigt
+                    ) : ticket.paymentStatus === 'confirmed' || ticket.paymentStatus === 'sent' ? (
+                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-100 print:border-none print:p-0 print:text-black print:bg-transparent">
+                         <CheckCircle2 className="w-3 h-3 print:hidden" /> Confirmed
                        </span>
                     ) : (
-                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <AlertCircle className="w-3.5 h-3.5 print:hidden" /> Offen
+                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-yellow-700 bg-yellow-50 border border-yellow-100 print:border-none print:p-0 print:text-black print:bg-transparent">
+                         <AlertCircle className="w-3 h-3 print:hidden" /> Pending
                        </span>
                     )}
                   </td>
@@ -193,8 +221,8 @@ export function EventBookingTable({ bookings }: Props) {
                        </span>
                     ) : '-'}
                   </td>
-                  <td className="p-4 text-gray-500 text-xs flex items-center gap-2 italic">
-                    <span className="truncate max-w-[120px] block">{ticket.info || '-'}</span>
+                  <td className="p-4 text-gray-700 font-medium flex items-center gap-2">
+                    <span className="truncate max-w-[200px] block font-bold text-brand-primary uppercase text-[10px] tracking-tight">{ticket.info || '-'}</span>
                     <button
                       onClick={() => handleResendMail(ticket.bookingId)}
                       title="Bestätigung & Ticket erneut senden"
@@ -207,6 +235,7 @@ export function EventBookingTable({ bookings }: Props) {
               ))
             )}
           </tbody>
+
         </table>
       </div>
     </div>

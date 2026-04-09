@@ -152,7 +152,7 @@ export function BookingFlow() {
     try {
       const tickets = bookingType === 'einzel' ? categories
         .filter(c => (quantities[c.id] || 0) > 0)
-        .map(c => ({ categoryId: c.id, quantity: quantities[c.id], regiondoOptionId: c.regiondoOptionId })) : [];
+        .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
 
       const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
 
@@ -200,7 +200,6 @@ export function BookingFlow() {
         tickets,
         customerData: { name: customerName, email: customerEmail, phone: customerPhone },
         totalAmount: totalPrice,
-        regiondoProductId: selectedEvent?.regiondoId
       }, (bookingType === 'einzel' || bookingType === 'gruppe') ? selectedSeats : []);
       
       setSuccess(true);
@@ -227,8 +226,8 @@ export function BookingFlow() {
   return (
     <div className="max-w-4xl mx-auto pb-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="border-b border-gray-200 pb-5">
-        <h1 className="text-3xl font-heading text-brand-primary font-bold">Varianten-Buchung (Mozart Ensemble)</h1>
-        <p className="text-gray-500 mt-2 text-lg font-medium">Regiondo B2B Flow & asymmetrische Kontingentbuchung</p>
+        <h1 className="text-3xl font-heading text-brand-primary font-bold">Varianten-Buchung (System)</h1>
+        <p className="text-gray-500 mt-2 text-lg font-medium">Partner Flow & Pauschalbuchung</p>
       </div>
 
       <div className="flex gap-4 mb-8">

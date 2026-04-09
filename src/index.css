@@ -3,11 +3,59 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --brand-red: #c02a2a;
+    --brand-red-dark: #8b1e1e;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.3);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  }
+
   body {
-    @apply font-sans bg-brand-main text-gray-900;
+    @apply font-sans bg-[#f8f9fa] text-slate-900 antialiased;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(192, 42, 42, 0.03) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(192, 42, 42, 0.03) 0px, transparent 50%);
+    min-height: 100vh;
   }
   
   h1, h2, h3, h4, h5, h6 {
-    @apply font-heading text-brand-primary;
+    @apply font-heading tracking-tight;
   }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-sm rounded-2xl p-6 transition-all duration-300;
+  }
+
+  .glass-card-hover {
+    @apply hover:shadow-lg hover:-translate-y-1 hover:border-white/60;
+  }
+
+  .btn-primary {
+    @apply bg-brand-red text-white font-bold py-2.5 px-6 rounded-xl hover:bg-brand-red-dark transition-all shadow-md active:scale-95 disabled:opacity-50;
+  }
+
+  .table-container {
+    @apply overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm;
+  }
+
+  .status-badge {
+    @apply px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
 }

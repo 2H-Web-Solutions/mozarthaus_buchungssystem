@@ -2,43 +2,30 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
-import { Booking } from '../types/schema';
-import { cancelBooking } from '../services/bookingService';
-import { Search, Filter } from 'lucide-react';
-// Verhindert Zeitzonen-Verschiebungen und zeigt Regiondo-Zeiten 1:1 an
-const formatRawDate = (dateVal: any, source?: string) => {
+import { Booking, TicketCategory } from '../types/schema';
+import { Search, ExternalLink } from 'lucide-react';
+import { getBookingDisplayData } from '../utils/bookingMapper';
+import { listenTicketCategories } from '../services/firebase/pricingService';
+
+// Verhindert Zeitzonen-Verschiebungen und zeigt Buchungszeiten 1:1 an
+const formatRawDate = (dateVal: any) => {
   if (!dateVal) return '-';
   
-  // 1. Fall: Natives Firebase Timestamp Objekt
   if (dateVal.toDate) {
     const options: Intl.DateTimeFormatOptions = { 
       day: '2-digit', month: '2-digit', year: 'numeric', 
       hour: '2-digit', minute: '2-digit' 
     };
-    // WICHTIG: n8n speichert Regiondo-Zeiten als UTC. Wir erzwingen hier UTC, 
-    // um die Originalzeit (ohne +2 Stunden Sommerzeit) wiederherzustellen!
-    if (source === 'regiondo') {
-      options.timeZone = 'UTC';
-    }
-    return dateVal.toDate().toLocaleString('de-AT', options) + ' Uhr';
+    return dateVal.toDate().toLocaleString('de-AT', options);
   }
   
-  // 2. Fall: Raw String
   if (typeof dateVal === 'string') {
+    // Regex für YYYY-MM-DD HH:mm:ss
     const match = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
     if (match) {
-      return `${match[3]}.${match[2]}.${match[1]}, ${match[4]}:${match[5]} Uhr`;
+      return `${match[3]}.${match[2]}.${match[1]}, ${match[4]}:${match[5]}`;
     }
-    try {
-      const options: Intl.DateTimeFormatOptions = { 
-        day: '2-digit', month: '2-digit', year: 'numeric', 
-        hour: '2-digit', minute: '2-digit' 
-      };
-      if (source === 'regiondo') options.timeZone = 'UTC';
-      return new Date(dateVal).toLocaleString('de-AT', options) + ' Uhr';
-    } catch (e) {
-      return dateVal;
-    }
+    return dateVal;
   }
   
   return '-';
@@ -46,15 +33,19 @@ const formatRawDate = (dateVal: any, source?: string) => {
 
 export function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterSource, setFilterSource] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [isCancelling, setIsCancelling] = useState<string | null>(null);
 
   useEffect(() => {
-    // For MVP sorting in JS. In prod, create composite index and use orderBy('createdAt', 'desc')
+    // 1. Listen for categories for mapping
+    const unsubCats = listenTicketCategories((data) => {
+      setCategories(data);
+    });
+
+    // 2. Listen for bookings
     const q = query(collection(db, `apps/${APP_ID}/bookings`));
-    const unsubscribe = onSnapshot(q, (snap) => {
+    const unsubBookings = onSnapshot(q, (snap) => {
       const b: Booking[] = [];
       snap.forEach(doc => b.push({ id: doc.id, ...doc.data() } as Booking));
       b.sort((x, y) => {
@@ -64,168 +55,143 @@ export function Bookings() {
       });
       setBookings(b);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubCats();
+      unsubBookings();
+    };
   }, []);
 
-  const handleCancel = async (bookingId: string) => {
-    if (!window.confirm('Buchung wirklich stornieren? Plätze werden wieder freigegeben!')) return;
-    setIsCancelling(bookingId);
-    try {
-      await cancelBooking(bookingId);
-    } catch (err: any) {
-      alert('Fehler beim Stornieren: ' + err.message);
-    } finally {
-      setIsCancelling(null);
-    }
-  };
-
-  const calculateTotal = (booking: Booking) => {
-    return booking.totalAmount || 0;
-  };
-
   const filteredBookings = bookings.filter(b => {
-    const customerName = b.customerData?.name || '';
-    const bookingId = b.id || '';
-    const matchSearch = customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        bookingId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchSource = filterSource === 'all' || b.source === filterSource;
-    const matchStatus = filterStatus === 'all' || b.status === filterStatus;
-    return matchSearch && matchSource && matchStatus;
+    const display = getBookingDisplayData(b);
+    const matchSearch = display.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        display.bookingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        b.id.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchStatus = filterStatus === 'all' || 
+                        (filterStatus === 'paid' && (display.status.includes('paid') || display.status === 'confirmed')) ||
+                        (filterStatus === 'cancelled' && display.status === 'cancelled');
+                        
+    return matchSearch && matchStatus;
   });
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-heading text-brand-primary">Buchungen</h1>
+    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h1 className="text-3xl font-black text-slate-900">Alle Buchungen</h1>
       </div>
 
-      <div className="bg-white p-4 rounded-t-lg shadow-sm border border-gray-200 border-b-0 flex gap-4 items-center">
+      <div className="glass-card flex flex-col md:flex-row gap-4 p-4">
         <div className="relative flex-1">
-          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Suchen nach Name oder ID..." 
+            placeholder="Name, Buchungs-ID oder E-Mail..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+            className="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-brand-red/20 transition-all text-sm font-medium"
           />
         </div>
-        <div className="flex gap-2 items-center">
-          <Filter className="w-4 h-4 text-gray-500" />
-          <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm bg-gray-50">
-            <option value="all">Alle Quellen</option>
-            <option value="manual">Manuell</option>
-            <option value="b2b">B2B Partner</option>
-            <option value="regiondo">Regiondo</option>
-          </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm bg-gray-50">
-            <option value="all">Alle Status</option>
-            <option value="confirmed">Bestätigt</option>
-            <option value="cancelled">Storniert</option>
+        <div className="flex gap-3">
+          <select 
+            value={filterStatus} 
+            onChange={e => setFilterStatus(e.target.value)} 
+            className="px-4 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold uppercase tracking-wider text-slate-500 focus:ring-2 focus:ring-brand-red/20 outline-none"
+          >
+            <option value="all">ALLE STATUS</option>
+            <option value="paid">BEZAHLT</option>
+            <option value="cancelled">STORNIERT</option>
           </select>
         </div>
       </div>
 
-        <div className="overflow-auto max-h-[calc(100vh-180px)] w-full bg-white shadow-sm rounded-lg border border-gray-200 relative">
-          <table className="w-full text-left border-collapse text-sm min-w-[1200px]">
-            <thead className="sticky top-0 bg-gray-100 z-10 shadow-sm">
-              <tr className="border-b border-gray-300 text-xs font-bold text-gray-700 uppercase tracking-wider">
-                <th className="p-3 border-r border-gray-200 bg-gray-100">ID</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Erstellt am</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Event / Datum</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Kunde</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Kontakt</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Tickets / Kat.</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Betrag</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Quelle</th>
-                <th className="p-3 border-r border-gray-200 bg-gray-100">Status</th>
-                <th className="p-3 bg-gray-100">Aktion</th>
+      <div className="table-container">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead>
+              <tr className="bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                <th className="px-6 py-5">Kunde & Kontakt</th>
+                <th className="px-6 py-5">Event Details</th>
+                <th className="px-6 py-5">Kategorie</th>
+                <th className="px-6 py-5">Buchung #</th>
+                <th className="px-6 py-5 text-center">Tickets</th>
+                <th className="px-6 py-5">Status</th>
+                <th className="px-6 py-5 text-right">Betrag</th>
+                <th className="px-6 py-5 text-center"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-slate-50">
                {filteredBookings.length === 0 ? (
-                 <tr><td colSpan={10} className="p-8 text-center text-gray-500">Keine Buchungen gefunden.</td></tr>
-               ) : filteredBookings.map(b => (
-                 <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                   <td className="p-3 border-r border-gray-200 font-mono text-xs text-gray-600 break-all min-w-[140px]">
-                     <span className="font-bold text-gray-900 block mb-1">
-                       {b.bookingNumber || '-'}
-                     </span>
-                     <span className="text-[10px] text-gray-400">
-                       {b.id?.replace('booking_regiondo_', '') || b.id}
-                     </span>
-                   </td>
-                   <td className="p-3 border-r border-gray-200 whitespace-nowrap text-gray-700">
-                     {formatRawDate(b.createdAt, b.source)}
-                   </td>
-                   <td className="p-3 border-r border-gray-200 min-w-[180px]">
-                     <div className="font-medium text-brand-primary">{String(b.eventId || '')}</div>
-                     {b.dateTime && <div className="text-xs text-gray-500">{formatRawDate(b.dateTime, b.source)}</div>}
-                   </td>
-                   <td className="p-3 border-r border-gray-200 font-medium text-gray-900 min-w-[140px]">
-                     {b.customerData?.name || '-'}
-                   </td>
-                   <td className="p-3 border-r border-gray-200 text-gray-600 min-w-[160px]">
-                     <div>{b.customerData?.email || '-'}</div>
-                     {b.customerData?.phone && <div className="text-xs text-gray-400 mt-0.5">{b.customerData.phone}</div>}
-                   </td>
-                   <td className="p-3 border-r border-gray-200 min-w-[140px]">
-                     <div className="font-medium">
-                       {b.bookingType === 'gruppe' || b.groupPersons ? (
-                         <span>{b.groupPersons} Personen</span>
-                       ) : b.seatIds && b.seatIds.length > 0 ? (
-                         <span>{b.seatIds.length} Plätze</span>
-                       ) : b.tickets && b.tickets.length > 0 ? (
-                         <span>{b.tickets.reduce((sum: number, t: any) => sum + (t.quantity || 1), 0)} Tickets</span>
-                       ) : (
-                         <span className="text-gray-400">0</span>
-                       )}
-                     </div>
-                     {(b.categoryName || b.categoryId || (b.tickets && b.tickets[0]?.categoryName)) && (
-                       <div className="text-xs text-gray-500 mt-1 font-semibold text-brand-primary">
-                         {b.categoryName || (b.tickets && b.tickets[0]?.categoryName) || `Kat: ${b.categoryId}`}
-                       </div>
-                     )}
-                   </td>
-                   <td className="p-3 border-r border-gray-200 font-bold whitespace-nowrap">
-                     € {calculateTotal(b).toFixed(2)}
-                   </td>
-                   <td className="p-3 border-r border-gray-200">
-                     <span className="px-2 py-1 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
-                       {b.source || 'MANUELL'}
-                     </span>
-                   </td>
-                   <td className="p-3 border-r border-gray-200">
-                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${b.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                       {b.status || 'UNKNOWN'}
-                     </span>
-                   </td>
-                   <td className="p-3 text-right whitespace-nowrap">
-                     {b.receiptUrl && (
-                       <a 
-                         href={b.receiptUrl} 
-                         target="_blank" 
-                         rel="noopener noreferrer"
-                         className="text-blue-600 hover:text-blue-800 text-xs font-bold mr-3"
-                       >
-                         Beleg PDF
-                       </a>
-                     )}
-                     {b.status === 'confirmed' && (
-                       <button 
-                         onClick={() => handleCancel(b.id)}
-                         disabled={isCancelling === b.id}
-                         className="text-red-600 hover:text-red-800 text-xs font-bold disabled:opacity-50"
-                       >
-                         {isCancelling === b.id ? '...' : 'Stornieren'}
-                       </button>
-                     )}
-                   </td>
-                 </tr>
-               ))}
+                 <tr><td colSpan={8} className="p-16 text-center text-slate-400 font-medium italic">Keine Buchungen vorhanden.</td></tr>
+               ) : filteredBookings.map(b => {
+                 const display = getBookingDisplayData(b);
+                 
+                 // Resolve Category Name with robust fallback logic
+                 const matchedByRegiondoId = categories.find(c => 
+                    (c.regiondoOptionId && (c.regiondoOptionId === display.optionId || c.regiondoOptionId === display.variationId)) ||
+                    c.id === display.optionId ||
+                    c.id === display.variationId
+                 );
+                 
+                 const matchedByName = categories.find(c => c.name === display.categoryPayloadName);
+                 
+                 const categoryName = matchedByRegiondoId?.name || 
+                                    matchedByName?.name || 
+                                    display.categoryPayloadName || 
+                                    display.variationId || 
+                                    display.optionId ||
+                                    '-';
+
+                 return (
+                  <tr key={b.id} className="hover:bg-slate-50/30 transition-colors group">
+                    <td className="px-6 py-5">
+                      <div className="font-bold text-slate-900">{display.customerName}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{display.customerEmail}</div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="font-semibold text-slate-800">{display.eventTitle}</div>
+                      <div className="text-[11px] text-slate-500 mt-1 font-bold">
+                        {display.eventDateTime ? formatRawDate(display.eventDateTime) : '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 text-[11px] font-bold text-slate-500 uppercase">
+                       {categoryName}
+                    </td>
+                    <td className="px-6 py-5 text-xs font-mono">
+                      <div className="text-slate-900 font-bold">{display.bookingNumber}</div>
+                      <div className="text-[9px] text-slate-300 mt-0.5 truncate max-w-[100px]">{b.id}</div>
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-black">
+                        {b.seatIds?.length || b.groupPersons || (b.lastPayload as any)?.qty || '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className={`status-badge ${
+                        display.status.includes('paid') || display.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        display.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' :
+                        'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {display.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-right font-black text-slate-900">
+                      € {display.totalAmount.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                       {b.receiptUrl && (
+                          <a href={b.receiptUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-300 hover:text-blue-500 transition-colors" title="Beleg öffnen">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                    </td>
+                  </tr>
+                 );
+               })}
             </tbody>
           </table>
         </div>
+      </div>
     </div>
   );
 }

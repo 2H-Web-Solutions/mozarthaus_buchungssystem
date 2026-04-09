@@ -14,7 +14,7 @@ export interface EventVariant {
   repertoire: string;
 }
 
-export interface RegiondoEventBlueprint {
+export interface EventBlueprint {
   id: string; // user predefined slug e.g. mozart_ensemble
   title: string;
   shortDescription: string;

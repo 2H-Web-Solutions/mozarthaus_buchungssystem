@@ -2,7 +2,6 @@ import { doc, runTransaction, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking } from '../types/schema';
-import { triggerN8nOutboundSync } from './n8nService';
 
 /**
  * Real-time active subscription listener mapped across all standard client Bookings.
@@ -78,9 +77,7 @@ export async function updateBookingStatus(
     
     // Dispatch async webhook representing backend status drift
     if (updatedBooking) {
-      triggerN8nOutboundSync(updatedBooking).catch(e => {
-        console.error('Failed to trigger n8n sync on status change:', e);
-      });
+      // n8n sync trigger removed per user request
     }
     
   } catch (error) {

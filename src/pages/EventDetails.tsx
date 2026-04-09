@@ -27,7 +27,7 @@ export function EventDetails() {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [source, setSource] = useState<'manual' | 'boxoffice' | 'phone' | 'website' | 'regiondo' | 'b2b'>('manual');
+  const [source, setSource] = useState<'manual' | 'boxoffice' | 'phone' | 'website' | 'b2b'>('manual');
   const [partners, setPartners] = useState<Partner[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
   const [isBooking, setIsBooking] = useState(false);
@@ -96,18 +96,7 @@ export function EventDetails() {
         status: 'confirmed',
         customerData: { name: customerName, email: customerEmail, phone: customerPhone },
         totalAmount: calculateTotal(),
-        regiondoProductId: event!.regiondoId,
-        tickets: selectedSeatIds.map(seatId => {
-          const fallbackId = ticketCategories.length > 0 ? ticketCategories[0].id : '';
-          const catId = seatCategories[seatId] || fallbackId;
-          const category = ticketCategories.find(c => c.id === catId);
-          return {
-            seatId,
-            categoryId: catId,
-            price: category?.price || 0,
-            regiondoOptionId: category?.regiondoOptionId
-          };
-        })
+            price: category?.price || 0
       });
       // Clear cart
       setCustomerName('');
@@ -221,7 +210,7 @@ export function EventDetails() {
                 <option value="phone">Telefonisch</option>
                 <option value="website">Website (Eigen)</option>
                 <option value="b2b">B2B Agentur</option>
-                <option value="regiondo">Regiondo API</option>
+                <option value="b2b">B2B Agentur</option>
               </select>
             </div>
             

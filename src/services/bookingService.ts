@@ -4,7 +4,6 @@ import { APP_ID } from '../lib/constants';
 import { SEATING_PLAN_TEMPLATE } from '../config/seatingPlan';
 import { Booking, Seat } from '../types/schema';
 import { sendBookingConfirmation } from './firebase/mailService';
-import { triggerN8nOutboundSync } from './n8nService';
 
 const getAppPath = () => `apps/${APP_ID}`;
 
@@ -137,9 +136,7 @@ export async function createBooking(
     });
 
     if (createdBooking) {
-      triggerN8nOutboundSync(createdBooking).catch(e => {
-        console.error('n8n sync trigger failed silently: ', e);
-      });
+      // Outbound sync removed per user request
     }
 
     return bookingId;
@@ -243,9 +240,7 @@ export async function createVariantBooking(bookingData: Omit<Booking, 'id' | 'cr
     });
 
     if (createdBooking) {
-      triggerN8nOutboundSync(createdBooking).catch(e => {
-        console.error('n8n sync trigger failed silently: ', e);
-      });
+      // Outbound sync removed per user request
     }
 
     return bookingId;

@@ -2,7 +2,6 @@ import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking, Seat } from '../types/schema';
-import { triggerN8nOutboundSync } from './n8nService';
 
 const generateBookingId = () => {
   const prefix = 'RES';
@@ -110,9 +109,7 @@ export async function executeBookingTransaction(
     });
 
     if (createdBooking) {
-      triggerN8nOutboundSync(createdBooking).catch(e => {
-        console.error('n8n sync trigger failed silently: ', e);
-      });
+      // n8n sync trigger removed per user request
     }
 
     return bookingId;

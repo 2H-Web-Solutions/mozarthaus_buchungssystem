@@ -61,12 +61,6 @@ export function Settings() {
         >
           Allgemein & Branding
         </button>
-        <button 
-          onClick={() => setActiveTab('integrations')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'integrations' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Integrationen & API
-        </button>
       </div>
 
       {activeTab === 'general' && (
@@ -126,33 +120,6 @@ export function Settings() {
       {activeTab === 'integrations' && (
         <div className="space-y-6">
           <DataSeeder />
-          
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900 mb-2">n8n / Regiondo Webhooks (Phase 2)</h2>
-            <p className="text-sm text-gray-500 mb-6">Nutze diese Endpunkte, um externe Buchungsinformationen (z.B. Regiondo, B2B APIs) sicher an das System zu leiten.</p>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Incoming Booking Webhook (Firestore HTTPS Callable)</label>
-                <CopyableField 
-                  value={`https://europe-west3-mozarthaus-6cf51.cloudfunctions.net/api/v1/apps/${APP_ID}/booking.create`} 
-                  label=""
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Event Sync Webhook (List events)</label>
-                <CopyableField 
-                  value={`https://europe-west3-mozarthaus-6cf51.cloudfunctions.net/api/v1/apps/${APP_ID}/events.list`} 
-                  label=""
-                />
-              </div>
-            </div>
-
-            <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-               <strong>Hinweis:</strong> Diese URLs sind Platzhalter für die n8n Infrastruktur (Phase 2). Derzeit liest das React System direkt aus Firestore über den Auth-less Layer.
-            </div>
-          </div>
         </div>
       )}
     </div>

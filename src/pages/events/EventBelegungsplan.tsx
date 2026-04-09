@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, or } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { Event, Booking } from '../../types/schema';
@@ -8,7 +8,7 @@ import type { Musiker } from '../../services/firebase/musikerService';
 import { SeatingChartVisual } from '../../components/events/SeatingChartVisual';
 import { EventMusikerAssignment } from '../../components/events/EventMusikerAssignment';
 import { EventBookingTable } from '../../components/events/EventBookingTable';
-import { ArrowLeft, Users, FileText, Music, Printer } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, Users, Music } from 'lucide-react';
 
 export function EventBelegungsplan() {
   const { eventId } = useParams();
@@ -40,8 +40,15 @@ export function EventBelegungsplan() {
       setMusikerList(list);
     });
 
-    // 3. Fetch all Bookings for this Event
-    const q = query(collection(db, `apps/${APP_ID}/bookings`), where('eventId', '==', eventId));
+    // 3. Fetch all Bookings for this Event (Handling both manual and synced field names)
+    const q = query(
+      collection(db, `apps/${APP_ID}/bookings`), 
+      or(
+        where('eventId', '==', eventId),
+        where('eventDocId', '==', eventId)
+      )
+    );
+    
     const unsubBookings = onSnapshot(q, (snap) => {
       const bList: Booking[] = [];
       snap.forEach(d => bList.push({ id: d.id, ...d.data() } as Booking));
@@ -69,7 +76,7 @@ export function EventBelegungsplan() {
     );
   }
 
-  // Extract all booked seat IDs from bookings
+  // Calculate stats for visuals
   const bookedSeatIds = bookings
     .filter(b => b.status !== 'cancelled')
     .flatMap(b => b.seatIds || []);
@@ -79,6 +86,7 @@ export function EventBelegungsplan() {
     .reduce((sum, b) => {
        if (b.groupPersons) return sum + b.groupPersons;
        if (b.tickets) return sum + b.tickets.reduce((s: number, t: any) => s + (t.quantity || 1), 0);
+       if (b.lastPayload?.qty) return sum + Number(b.lastPayload.qty);
        return sum;
     }, 0);
     
@@ -88,68 +96,75 @@ export function EventBelegungsplan() {
     ? (event.date as any).toDate().toLocaleDateString('de-AT', { dateStyle: 'full' }) 
     : String(event.date);
 
+  console.log("DEBUG: Bookings for this event:", bookings);
+
   return (
-    <div className="max-w-[1400px] mx-auto pb-12 print:pb-0 print:max-w-none">
+    <div className="max-w-[1400px] mx-auto pb-12 print:pb-0 print:max-w-none px-4 md:px-8">
       
       {/* Print-Only Header */}
       <div className="hidden print:block mb-8 border-b-2 border-black pb-4">
         <h1 className="text-3xl font-bold font-heading text-black m-0 mb-1">{event.title}</h1>
-        <p className="text-xl text-black font-medium text-gray-800 m-0">
+        <p className="text-xl text-black font-medium m-0">
           {eventDateStr} | {event.time || ''} Uhr
         </p>
         <h2 className="text-xl font-bold mt-2 uppercase tracking-widest text-gray-500">Belegungs- & Abendkassenplan</h2>
       </div>
 
-      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden pt-8">
         <div>
           <button 
             onClick={() => navigate('/events')}
-            className="flex items-center gap-2 text-gray-500 hover:text-brand-primary font-medium text-sm mb-2 transition-colors"
+            className="flex items-center gap-2 text-gray-400 hover:text-brand-primary font-bold text-xs uppercase tracking-widest mb-4 transition-all"
           >
             <ArrowLeft className="w-4 h-4" /> Zurück zu Events
           </button>
-          <h1 className="text-3xl font-heading text-brand-primary font-bold flex items-center gap-3">
-            <FileText className="w-8 h-8 opacity-80" />
-            Belegungsplan & Dienstplan
+          <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3">
+            <FileText className="w-10 h-10 text-brand-red opacity-90" />
+            Belegungsplan
           </h1>
-          <p className="text-gray-600 font-medium mt-1 text-lg">
-            {event.title} <span className="text-gray-400 mx-2">|</span> {eventDateStr} {event.time || ''} Uhr
+          <p className="text-slate-500 font-bold mt-2 text-lg">
+            {event.title} <span className="text-slate-300 mx-3">|</span> {eventDateStr} {event.time || ''} Uhr
           </p>
         </div>
         
         <div className="flex items-center gap-3">
           <button 
             onClick={() => window.print()}
-            className="px-4 py-2.5 bg-gray-900 text-white font-bold rounded-xl shadow-sm hover:bg-gray-800 transition-all flex items-center gap-2"
+            className="px-6 py-3 bg-slate-900 text-white font-black rounded-xl shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2 transform active:scale-95"
           >
             <Printer className="w-5 h-5" />
-            Drucken
+            DRUCKEN
           </button>
           <button 
             onClick={() => navigate(`/events/${event.id}`)}
-            className="px-4 py-2.5 bg-white text-gray-700 font-bold border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 hover:border-brand-primary/30 transition-all flex items-center gap-2"
+            className="px-6 py-3 bg-white text-slate-700 font-black border-2 border-slate-100 rounded-xl shadow-sm hover:border-brand-red/30 hover:bg-slate-50 transition-all transform active:scale-95"
           >
-             Kasse / Verkauf öffnen
+             KASSE ÖFFNEN
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8 mt-8 print:block print:w-full print:mt-2 print:mb-4">
-        {/* Links: Visueller Saalplan */}
+      {/* restored Seating Chart and Musician sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-8 print:block print:w-full print:mt-2 print:mb-4">
+        {/* Left: Visueller Saalplan */}
         <div className="flex flex-col gap-3 print:mb-8 print:w-1/2 print:mx-auto">
-          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2 print:hidden">
-            <Users className="w-5 h-5 text-gray-400" />
-            Visueller Saalplan
-            <span className="text-sm font-bold bg-brand-primary text-white px-2 py-0.5 rounded-full ml-auto">
-              {totalBooked} belegt
+          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center justify-between px-2 print:hidden mb-2">
+            <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-gray-400" />
+                Saalplan
+            </div>
+            <span className="text-sm font-bold bg-brand-red text-white px-3 py-1 rounded-full shadow-lg shadow-brand-red/10 animate-pulse">
+                {totalBooked} / {event.totalCapacity || 67} Belegt
             </span>
           </h2>
-          <SeatingChartVisual eventId={eventId!} bookedSeatIds={bookedSeatIds} />
+          <div className="glass-card p-4">
+            <SeatingChartVisual eventId={eventId!} bookedSeatIds={bookedSeatIds} />
+          </div>
         </div>
         
-        {/* Rechts: Musiker & Gagen */}
+        {/* Right: Musiker & Dienstplan */}
         <div className="flex flex-col gap-3 print:hidden">
-          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2">
+          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2 mb-2">
             <Music className="w-5 h-5 text-gray-400" />
             Dienstplan
           </h2>
@@ -157,12 +172,18 @@ export function EventBelegungsplan() {
         </div>
       </div>
 
-      {/* Unten: Buchungs-Tabelle */}
-      <div className="print:w-full">
-        <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2 mb-4 mt-12 print:hidden">
-          Detaillierte Ticket-Liste
-        </h2>
+      {/* Main Content: Booking Table */}
+      <div className="glass-card overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">Detaillierte Teilnehmerliste</h2>
+        </div>
         <EventBookingTable bookings={bookings} />
+      </div>
+
+      <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100/50 print:hidden">
+        <p className="text-xs font-bold text-amber-700 flex items-center gap-2">
+            💡 TIPP: Klicken Sie auf "DRUCKEN" um eine physische Liste für den Einlass zu generieren. Erstattete Buchungen erscheinen hier nicht.
+        </p>
       </div>
     </div>
   );

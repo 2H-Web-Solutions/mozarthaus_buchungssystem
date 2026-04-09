@@ -7,11 +7,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          primary: '#c02a2a',
-          sidebar: '#bababa',
-          main: '#ffffff',
-        }
+        'brand-primary': '#c02a2a',
+        'brand-red': '#c02a2a',
+        'brand-red-dark': '#8b1e1e',
+        'brand-sidebar': '#bababa',
+        'brand-main': '#ffffff',
       },
       fontFamily: {
         sans: ['Serif', 'serif'], // Body Font

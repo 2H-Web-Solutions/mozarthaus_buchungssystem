@@ -15,8 +15,11 @@ export interface Event {
   time?: string;
   status: 'active' | 'completed' | 'cancelled';
   ensemble?: EventEnsembleMember[];
-  regiondoId?: string | number; // NEU: Mapping-ID für Regiondo Inbound Sync
+  occupied?: number;
+  totalCapacity?: number;
+  regiondoId?: string; // Restore for mapping and display
 }
+
 
 export interface Seat {
   id: string;
@@ -29,29 +32,27 @@ export interface Seat {
 
 export interface Booking {
   id: string;
-  bookingNumber?: string; // NEU: Fortlaufende Nummer (z.B. 2026-1) oder Regiondo Order-ID
+  bookingNumber?: string; // Fortlaufende Nummer (z.B. 2026-1)
   eventId: string;
   variantId?: string;
   partnerId: string | null;
   isB2B: boolean;
-  source: 'manual' | 'boxoffice' | 'phone' | 'website' | 'regiondo' | 'b2b';
+  source: 'manual' | 'boxoffice' | 'phone' | 'website' | 'b2b';
   status: 'confirmed' | 'cancelled' | 'pending' | 'paid';
   paymentMethod?: 'bar' | 'karte' | 'voucher' | 'rechnung';
   seatIds?: string[];
-  tickets?: { seatId?: string, categoryId: string, categoryName?: string, quantity?: number, price?: number, regiondoOptionId?: string | number }[];
+  tickets?: { seatId?: string, categoryId: string, categoryName?: string, quantity?: number, price?: number }[];
   checkedInSeats?: string[]; // Specifically for Abendkasse per-seat tracking
   customerData: {
     name: string;
     email: string;
-    phone?: string; // NEU: Telefonnummer für Regiondo
+    phone?: string;
   };
   eventDate?: string; // Optional: The human-readable date string of the event (e.g. 21.05.2024)
   dateTime?: string; // Optional: The human-readable timestamp of the event for display
-  categoryId?: string; // NEU: Category ID from Regiondo
-  categoryName?: string; // NEU: Lesbarer Name der Option/Kategorie
+  categoryName?: string; // Lesbarer Name der Option/Kategorie
   eventTitle?: string;
   totalAmount: number;
-  regiondoProductId?: string | number; // NEU: Die Event-ID für Regiondo
   
   // Neue Felder für Buchungsvarianten
   bookingType?: 'einzel' | 'gruppe' | 'privat';
@@ -59,7 +60,10 @@ export interface Booking {
   contactPerson?: string;
   groupPersons?: number;
   customTotalPrice?: number;
-  receiptUrl?: string; // Link zum externen Stripe-Beleg / Regiondo-Ticket
+  receiptUrl?: string; // Link zum externen Beleg
+  
+  // Source-specific payload containing raw data from Regiondo or other providers
+  lastPayload?: Record<string, any>;
 
   createdAt: Timestamp;
   updatedAt?: string | Timestamp;
@@ -89,6 +93,6 @@ export interface TicketCategory {
   price: number; 
   colorCode: string; // Hex color
   isActive: boolean;
+  regiondoOptionId?: string; // Add for mapping
   description?: string;
-  regiondoOptionId?: string | number; // NEU: Die Option-ID für Regiondo
 }

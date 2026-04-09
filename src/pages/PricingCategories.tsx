@@ -62,7 +62,6 @@ export function PricingCategories() {
               <th className="p-4 font-bold">ID / Alias</th>
               <th className="p-4 font-bold">Name</th>
               <th className="p-4 font-bold">Preis</th>
-              <th className="p-4 font-bold">Regiondo ID</th>
               <th className="p-4 font-bold text-center">Aktiv</th>
               <th className="p-4 font-bold text-right">Aktionen</th>
             </tr>
@@ -76,15 +75,6 @@ export function PricingCategories() {
                 <td className="p-4 font-mono text-sm text-gray-600">{cat.id}</td>
                 <td className="p-4 font-medium text-gray-900">{cat.name}</td>
                 <td className="p-4 font-bold text-gray-900">€{cat.price.toFixed(2)}</td>
-                <td className="p-4">
-                  {cat.regiondoOptionId ? (
-                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-bold rounded-lg bg-red-100 text-red-800 border border-red-200">
-                      {cat.regiondoOptionId}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 font-medium">-</span>
-                  )}
-                </td>
                 <td className="p-4 text-center">
                   {cat.isActive ? <Check className="w-5 h-5 text-green-500 mx-auto" /> : <X className="w-5 h-5 text-gray-400 mx-auto" />}
                 </td>
@@ -127,8 +117,7 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
       price: 0,
       colorCode: '#c02a2a',
       isActive: true,
-      description: '',
-      regiondoOptionId: ''
+      description: ''
     }
   );
 
@@ -250,17 +239,6 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
               />
             </div>
             
-            <div className="bg-red-50 p-4 border border-brand-primary/20 rounded-xl">
-              <label className="block text-sm font-bold text-brand-primary mb-1">Regiondo Option ID (Integration)</label>
-              <input
-                type="text"
-                value={formData.regiondoOptionId || ''}
-                onChange={e => setFormData({ ...formData, regiondoOptionId: e.target.value })}
-                placeholder="z.B. 1549178"
-                className="w-full p-2.5 border border-brand-primary/30 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none font-mono"
-              />
-              <p className="text-xs text-brand-primary/70 mt-1">Erforderlich für den Regiondo Inbound/Outbound Sync der Ticket-Zuweisung.</p>
-            </div>
           </div>
 
           <div className="mt-8 flex gap-3">

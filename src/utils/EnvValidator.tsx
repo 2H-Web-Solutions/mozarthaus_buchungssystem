@@ -3,8 +3,7 @@ import { AlertCircle } from 'lucide-react';
 
 const REQUIRED_ENVS = [
   'VITE_FIREBASE_API_KEY',
-  'VITE_FIREBASE_PROJECT_ID',
-  'VITE_N8N_WEBHOOK_URL'
+  'VITE_FIREBASE_PROJECT_ID'
 ];
 
 export function EnvValidator({ children }: { children: ReactNode }) {

@@ -124,8 +124,18 @@ export function Statistics() {
       }
     });
 
-    const totalCapacity = validEvents.length * 60;
-    const occRate = totalCapacity > 0 ? Math.round((tTickets / totalCapacity) * 100) : 0;
+    // Calculate total capacity based on the number of events (67 seats per event)
+    const totalCapacity = validEvents.reduce((acc, e) => acc + (e.totalCapacity || 67), 0);
+    
+    // Sum up the recorded 'occupied' counts from the events in this range
+    const totalOccurrencesCount = validEvents.reduce((acc, e) => acc + (e.occupied || 0), 0);
+    
+    // We use the higher count between direct bookings and the event-level occupancy field
+    // to ensure we capture all attendees.
+    const effectiveBooked = Math.max(tTickets, totalOccurrencesCount);
+    
+    const occRate = totalCapacity > 0 ? Math.round((effectiveBooked / totalCapacity) * 100) : 0;
+
 
     const enrichedBookings = fBookings.map(b => {
        let resolvedEventDateString = '';
