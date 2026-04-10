@@ -73,8 +73,7 @@ export function EventBookingTable({ bookings, seating }: Props) {
        seatsLabel,
        quantity: display.quantity,
        createdAt: createdDate,
-       // Use a single flag for group check-in
-       isCheckedIn: !!booking.isCheckedIn || (booking.checkedInSeats && booking.checkedInSeats.length >= (booking.seatIds?.length || 1))
+       isCheckedIn: !!booking.isCheckedIn || (!!booking.checkedInSeats && booking.checkedInSeats.length >= (booking.seatIds?.length || 1))
      });
   });
 

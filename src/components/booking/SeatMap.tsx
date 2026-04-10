@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc } from 'firebase/firestore';
+import { onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { Seat } from '../../types/schema';

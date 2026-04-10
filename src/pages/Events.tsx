@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, doc, query, where, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, getCountFromServer, or } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, getCountFromServer } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
@@ -53,8 +53,8 @@ export function Events() {
   const [events, setEvents] = useState<Event[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalEvents, setTotalEvents] = useState(0);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
-  const [docHistory, setDocHistory] = useState<QueryDocumentSnapshot[]>([]);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<any, any> | null>(null);
+  const [docHistory, setDocHistory] = useState<QueryDocumentSnapshot<any, any>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const PAGE_SIZE = 10;
 

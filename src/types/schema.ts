@@ -23,6 +23,7 @@ export interface Event {
     row: string,
     number: number
   }>;
+  occupied?: number;
 }
 
 
@@ -69,6 +70,8 @@ export interface Booking {
   
   // Source-specific payload containing raw data from Regiondo or other providers
   lastPayload?: Record<string, any>;
+  isCheckedIn?: boolean;
+  effectiveQty?: number;
 
   createdAt: Timestamp;
   updatedAt?: string | Timestamp;

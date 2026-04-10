@@ -77,6 +77,8 @@ export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: 
         },
         source: 'boxoffice',
         status: 'paid',
+        partnerId: null,
+        isB2B: false,
         paymentMethod,
         totalAmount: priceMapping[priceCategory] || 69,
         categoryName: selectedSeat.category === 'A' ? 'Category A' : 'Category B'

@@ -1,8 +1,8 @@
-import { doc, runTransaction, writeBatch, Timestamp, collection, query, onSnapshot } from 'firebase/firestore';
+import { doc, runTransaction, writeBatch, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { SEATING_PLAN_TEMPLATE } from '../config/seatingPlan';
-import { Booking, Seat } from '../types/schema';
+import { Booking } from '../types/schema';
 import { sendBookingConfirmation } from './firebase/mailService';
 
 const getAppPath = () => `apps/${APP_ID}`;
@@ -70,7 +70,6 @@ export async function createBooking(
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
   const eventRef = doc(db, `${getAppPath()}/events`, eventId);
 
-  let createdBooking: Booking | null = null;
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -126,7 +125,6 @@ export async function createBooking(
 
       transaction.update(eventRef, { seating: updatedSeating });
       transaction.set(bookingRef, sanitizeForFirestore(newBooking));
-      createdBooking = newBooking;
     });
     
     sendBookingConfirmation(bookingId).catch(e => console.error('Mail confirmation trigger failed silently: ', e));

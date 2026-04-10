@@ -77,20 +77,7 @@ export function EventBelegungsplan() {
   }
 
   // Calculate stats for visuals
-  const bookedSeatIds = bookings
-    .filter(b => b.status !== 'cancelled')
-    .flatMap(b => b.seatIds || []);
-
-  const groupTicketsCount = bookings
-    .filter(b => b.status !== 'cancelled' && (!b.seatIds || b.seatIds.length === 0))
-    .reduce((sum, b) => {
-       if (b.groupPersons) return sum + b.groupPersons;
-       if (b.tickets) return sum + b.tickets.reduce((s: number, t: any) => s + (t.quantity || 1), 0);
-       if (b.lastPayload?.qty) return sum + Number(b.lastPayload.qty);
-       return sum;
-    }, 0);
     
-  const totalBooked = bookedSeatIds.length + groupTicketsCount;
 
   const eventDateStr = typeof event.date !== 'string' && (event.date as any)?.toDate 
     ? (event.date as any).toDate().toLocaleDateString('de-AT', { dateStyle: 'full' }) 
