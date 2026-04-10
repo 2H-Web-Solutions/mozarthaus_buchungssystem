@@ -15,9 +15,14 @@ export interface Event {
   time?: string;
   status: 'active' | 'completed' | 'cancelled';
   ensemble?: EventEnsembleMember[];
-  occupied?: number;
   totalCapacity?: number;
   regiondoId?: string; // Restore for mapping and display
+  seating?: Record<string, { 
+    bookingId: string | null, 
+    category: 'A' | 'B' | 'STUDENT',
+    row: string,
+    number: number
+  }>;
 }
 
 

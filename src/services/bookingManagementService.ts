@@ -48,18 +48,22 @@ export async function updateBookingStatus(
       // Ensure locked seats are released exactly once during cancellation mutations
       if (newStatus === 'cancelled' && bookingData.status !== 'cancelled') {
          if (bookingData.seatIds && bookingData.seatIds.length > 0) {
-            const seatsColPath = `apps/${APP_ID}/events/${bookingData.eventId}/seats`;
+            const eventRef = doc(db, `apps/${APP_ID}/events`, bookingData.eventId);
+            const eventSnap = await transaction.get(eventRef);
             
-            // Read target seats
-            const seatRefs = bookingData.seatIds.map(id => doc(db, seatsColPath, id));
-            
-            // Mutate physical floorplan tracking records sequentially into memory cache
-            seatRefs.forEach(ref => {
-              transaction.update(ref, {
-                status: 'available',
-                bookingId: null
+            if (eventSnap.exists()) {
+              const eventData = eventSnap.data();
+              const seating = eventData.seating || {};
+              const updatedSeating = { ...seating };
+              
+              bookingData.seatIds.forEach(seatId => {
+                if (updatedSeating[seatId]) {
+                  updatedSeating[seatId].bookingId = null;
+                }
               });
-            });
+              
+              transaction.update(eventRef, { seating: updatedSeating });
+            }
          }
       }
 

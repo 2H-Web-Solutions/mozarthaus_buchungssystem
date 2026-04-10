@@ -34,30 +34,27 @@ async function getNextBookingNumber(transaction: any): Promise<string> {
 }
 
 /**
- * Initializes all seat documents for a newly created event.
- * Writes to subcollection: apps/.../events/{eventId}/seats
+ * Initializes the seating map directly on the event document.
  */
 export async function initializeEventSeats(eventId: string) {
-  const batch = writeBatch(db);
-  const seatsColPath = `${getAppPath()}/events/${eventId}/seats`;
+  const eventRef = doc(db, `${getAppPath()}/events`, eventId);
+  const seating: Record<string, any> = {};
 
   SEATING_PLAN_TEMPLATE.forEach(row => {
     row.elements.forEach(el => {
       if (el.type === 'seat') {
-        const seatRef = doc(db, seatsColPath, el.id);
-        const newSeat: Seat = {
-          id: el.id,
+        seating[el.id] = {
+          bookingId: null,
+          category: el.category,
           row: el.row,
-          number: el.number,
-          status: 'available',
-          eventId: eventId,
-          bookingId: null
+          number: el.number
         };
-        batch.set(seatRef, newSeat);
       }
     });
   });
 
+  const batch = writeBatch(db);
+  batch.update(eventRef, { seating });
   await batch.commit();
 }
 
@@ -71,43 +68,45 @@ export async function createBooking(
 ) {
   const bookingId = `booking_${eventId}_${Date.now()}`;
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
-  const seatsColPath = `${getAppPath()}/events/${eventId}/seats`;
+  const eventRef = doc(db, `${getAppPath()}/events`, eventId);
 
   let createdBooking: Booking | null = null;
 
   try {
     await runTransaction(db, async (transaction) => {
-      // 1. Read all requested Seat documents
-      const seatRefs = seatIds.map(id => doc(db, seatsColPath, id));
-      const seatDocs = await Promise.all(seatRefs.map(ref => transaction.get(ref)));
+      // 1. Get Event to check seating map
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists()) throw new Error('Event not found');
+      
+      const eventData = eventDoc.data();
+      const seating = eventData.seating || {};
 
       // 2. Validate availability
-      for (const seatDoc of seatDocs) {
-        if (!seatDoc.exists()) {
-          throw new Error(`Seat ${seatDoc.id} does not exist`);
-        }
-        const seat = seatDoc.data() as Seat;
-        if (seat.status !== 'available') {
-          throw new Error('Seats already taken');
-        }
+      for (const seatId of seatIds) {
+        if (!seating[seatId]) throw new Error(`Seat ${seatId} does not exist`);
+        if (seating[seatId].bookingId) throw new Error('Seats already taken');
       }
 
-      // 3. Write updates (Mark seats as sold/reserved)
-      const targetStatus = bookingData.source === 'b2b' ? 'reserved' : 'sold';
-      seatRefs.forEach(ref => {
-        transaction.update(ref, {
-          status: targetStatus,
-          bookingId: bookingId
-        });
+      // 3. Update seating map
+      const updatedSeating = { ...seating };
+      seatIds.forEach(id => {
+        if (updatedSeating[id]) {
+          updatedSeating[id].bookingId = bookingId;
+          // Set category to STUDENT if the booking is for a student
+          if (bookingData.categoryName?.toLowerCase().includes('student') || 
+              bookingData.lastPayload?.variation_name?.toLowerCase().includes('student')) {
+            updatedSeating[id].category = 'STUDENT';
+          }
+        }
       });
 
-      // 4. Create the Booking document
-      const bookingNumber = await getNextBookingNumber(transaction); // NEU
+      // 4. Create the Booking document & update event
+      const bookingNumber = await getNextBookingNumber(transaction);
       
       const newBooking: Booking = {
         ...bookingData,
         id: bookingId,
-        bookingNumber: bookingNumber, // NEU
+        bookingNumber: bookingNumber,
         eventId,
         seatIds,
         createdAt: Timestamp.now()
@@ -125,19 +124,12 @@ export async function createBooking(
         return result;
       };
 
-      const sanitizedBooking = sanitizeForFirestore(newBooking);
-      transaction.set(bookingRef, sanitizedBooking);
-      createdBooking = sanitizedBooking;
+      transaction.update(eventRef, { seating: updatedSeating });
+      transaction.set(bookingRef, sanitizeForFirestore(newBooking));
+      createdBooking = newBooking;
     });
     
-    // Asynchronous trigger for email confirmation
-    sendBookingConfirmation(bookingId).catch(e => {
-      console.error('Mail confirmation trigger failed silently: ', e);
-    });
-
-    if (createdBooking) {
-      // Outbound sync removed per user request
-    }
+    sendBookingConfirmation(bookingId).catch(e => console.error('Mail confirmation trigger failed silently: ', e));
 
     return bookingId;
   } catch (error) {
@@ -147,7 +139,7 @@ export async function createBooking(
 }
 
 /**
- * Cancels a booking and resets its associated seats.
+ * Cancels a booking and resets its associated seats in the event seating map.
  */
 export async function cancelBooking(bookingId: string) {
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
@@ -155,27 +147,30 @@ export async function cancelBooking(bookingId: string) {
   try {
     await runTransaction(db, async (transaction) => {
       const bookingDoc = await transaction.get(bookingRef);
-      if (!bookingDoc.exists()) {
-        throw new Error('Booking not found');
-      }
+      if (!bookingDoc.exists()) throw new Error('Booking not found');
 
       const booking = bookingDoc.data() as Booking;
       if (booking.status === 'cancelled') return;
 
-      if (booking.seatIds && booking.seatIds.length > 0) {
-        const seatsColPath = `${getAppPath()}/events/${booking.eventId}/seats`;
-        const seatRefs = booking.seatIds.map(id => doc(db, seatsColPath, id));
+      const eventRef = doc(db, `${getAppPath()}/events`, booking.eventId);
+      const eventDoc = await transaction.get(eventRef);
+      
+      if (eventDoc.exists()) {
+        const seating = eventDoc.data().seating || {};
+        const updatedSeating = { ...seating };
 
-        // Reset seats
-        seatRefs.forEach(ref => {
-          transaction.update(ref, {
-            status: 'available',
-            bookingId: null
-          });
+        Object.keys(updatedSeating).forEach(id => {
+          if (updatedSeating[id].bookingId === bookingId) {
+            updatedSeating[id].bookingId = null;
+            // Restore original category based on row
+            const row = updatedSeating[id].row;
+            updatedSeating[id].category = (['A', 'B', 'C'].includes(row) ? 'A' : 'B');
+          }
         });
+
+        transaction.update(eventRef, { seating: updatedSeating });
       }
 
-      // Cancel booking
       transaction.update(bookingRef, { status: 'cancelled' });
     });
   } catch (error) {
@@ -185,67 +180,79 @@ export async function cancelBooking(bookingId: string) {
 }
 
 /**
- * Real-time listener setup for seating plan UI per event.
+ * Real-time listener for the event document to get the seating map.
  */
-export function getEventSeats(eventId: string, callback: (seats: Seat[]) => void) {
-  const seatsColPath = `${getAppPath()}/events/${eventId}/seats`;
-  const q = query(collection(db, seatsColPath));
-  
-  return onSnapshot(q, (snapshot) => {
-    const seats: Seat[] = [];
-    snapshot.forEach((doc) => {
-      seats.push(doc.data() as Seat);
-    });
-    callback(seats);
+export function getEventSeating(eventId: string, callback: (eventData: any) => void) {
+  const eventRef = doc(db, `${getAppPath()}/events`, eventId);
+  return onSnapshot(eventRef, (doc) => {
+    callback(doc.data());
   });
 }
 
 /**
- * Creates a variant-based booking without assigning specific seats (B2B/Regiondo ticket flow)
+ * Creates a variant-based booking and AUTO-ASSIGNS seats based on category.
  */
 export async function createVariantBooking(bookingData: Omit<Booking, 'id' | 'createdAt'>) {
   const bookingId = `booking_${bookingData.eventId}_${Date.now()}`;
   const bookingRef = doc(db, `${getAppPath()}/bookings`, bookingId);
-
-  let createdBooking: Booking | null = null;
+  const eventRef = doc(db, `${getAppPath()}/events`, bookingData.eventId);
 
   try {
     await runTransaction(db, async (transaction) => {
-       const newBooking: Booking = {
-         ...bookingData,
-         id: bookingId,
-         createdAt: Timestamp.now()
-       };
-       
-      const sanitizeForFirestore = (obj: any): any => {
-        if (obj === null || typeof obj !== 'object' || obj instanceof Timestamp) return obj;
-        if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
-        const result: any = {};
-        for (const key in obj) {
-          if (obj[key] !== undefined) {
-            result[key] = sanitizeForFirestore(obj[key]);
-          }
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists()) throw new Error('Event not found');
+      
+      const seating = eventDoc.data().seating || {};
+      const updatedSeating = { ...seating };
+
+      // Determine category from variation_name or other fields
+      const variation = (bookingData.lastPayload?.variation_name || bookingData.categoryName || '').toLowerCase();
+      let targetCat: 'A' | 'B' | 'STUDENT' = 'B';
+      if (variation.includes('category a') || variation.includes('kategorie a')) targetCat = 'A';
+      else if (variation.includes('student')) targetCat = 'STUDENT';
+
+      // Auto-assign logic
+      const qty = bookingData.effectiveQty || bookingData.lastPayload?.qty || 1;
+      
+      let availableSeats: string[] = [];
+      if (targetCat === 'STUDENT') {
+        // Students prefer Cat B (Rows D-F) but can sit in Cat A (Rows A-C) if needed
+        const catB = Object.keys(updatedSeating).filter(id => updatedSeating[id].category === 'B' && updatedSeating[id].bookingId === null);
+        const catA = Object.keys(updatedSeating).filter(id => updatedSeating[id].category === 'A' && updatedSeating[id].bookingId === null);
+        availableSeats = [...catB, ...catA];
+      } else {
+        availableSeats = Object.keys(updatedSeating).filter(id => 
+          updatedSeating[id].category === targetCat && updatedSeating[id].bookingId === null
+        );
+      }
+
+      const assignedSeatIds: string[] = [];
+      for(let i = 0; i < Math.min(qty, availableSeats.length); i++) {
+        const seatId = availableSeats[i];
+        updatedSeating[seatId].bookingId = bookingId;
+        if (targetCat === 'STUDENT') {
+          updatedSeating[seatId].category = 'STUDENT';
         }
-        return result;
+        assignedSeatIds.push(seatId);
+      }
+
+      const bookingNumber = await getNextBookingNumber(transaction);
+      const newBooking: Booking = {
+        ...bookingData,
+        id: bookingId,
+        bookingNumber,
+        seatIds: assignedSeatIds,
+        createdAt: Timestamp.now()
       };
 
-      const sanitizedBooking = sanitizeForFirestore(newBooking);
-      transaction.set(bookingRef, sanitizedBooking);
-      createdBooking = sanitizedBooking;
+      transaction.update(eventRef, { seating: updatedSeating });
+      transaction.set(bookingRef, newBooking);
     });
 
-    // Asynchronous trigger for email confirmation
-    sendBookingConfirmation(bookingId).catch(e => {
-      console.error('Mail confirmation trigger failed silently: ', e);
-    });
-
-    if (createdBooking) {
-      // Outbound sync removed per user request
-    }
-
+    sendBookingConfirmation(bookingId).catch(console.error);
     return bookingId;
   } catch (error) {
-    console.error('Variant booking transaction failed: ', error);
+    console.error('Variant booking failed: ', error);
     throw error;
   }
 }

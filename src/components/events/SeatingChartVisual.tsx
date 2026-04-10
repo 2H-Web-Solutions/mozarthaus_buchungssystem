@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { SEATING_PLAN_TEMPLATE } from '../../config/seatingPlan';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import { APP_ID } from '../../lib/constants';
 import { X } from 'lucide-react';
+import { createBooking } from '../../services/bookingService';
 
 interface Props {
   eventId: string;
-  bookedSeatIds: string[];
+  seating?: Record<string, { 
+    bookingId: string | null, 
+    category: 'A' | 'B' | 'STUDENT',
+    row: string,
+    number: number
+  }>;
+  readOnly?: boolean;
 }
 
-export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
-  const [selectedSeat, setSelectedSeat] = useState<{ id: string, name: string } | null>(null);
+export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: Props) {
+  const [selectedSeat, setSelectedSeat] = useState<{ id: string, name: string, category: string } | null>(null);
   const [customerName, setCustomerName] = useState('Abendkasse');
   const [paymentMethod, setPaymentMethod] = useState<'bar' | 'karte'>('bar');
   const [priceCategory, setPriceCategory] = useState('Standard (€69)');
@@ -23,10 +27,37 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
     'Student (€29)': 29
   };
 
+  const getSeatColor = (seatId: string) => {
+    const seat = seating[seatId];
+    if (!seat) return 'border-gray-200 bg-gray-50';
+    
+    const isBooked = !!seat.bookingId;
+    if (!isBooked) return 'border-gray-300 bg-white hover:border-brand-primary/50';
+
+    // Occupied colors by category
+    switch (seat.category) {
+      case 'A': return 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37]';
+      case 'B': return 'border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]';
+      case 'STUDENT': return 'border-[#10B981] bg-[#10B981]/10 text-[#10B981]';
+      default: return 'border-brand-primary bg-brand-primary/10';
+    }
+  };
+
+  const getDotColor = (category: string) => {
+    switch (category) {
+      case 'A': return 'bg-[#D4AF37]';
+      case 'B': return 'bg-[#1E3A8A]';
+      case 'STUDENT': return 'bg-[#10B981]';
+      default: return 'bg-brand-primary';
+    }
+  };
+
   const openQuickSell = (seatId: string) => {
+    const seat = seating[seatId];
     setSelectedSeat({
       id: seatId,
-      name: seatId.replace(/row_|_seat_/g, ' ').toUpperCase()
+      name: seatId.replace(/row_|_seat_/g, ' ').toUpperCase(),
+      category: seat?.category || 'B'
     });
     setCustomerName('Abendkasse');
     setPaymentMethod('bar');
@@ -38,12 +69,8 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
     if (!selectedSeat) return;
     setIsSaving(true);
     
-    // Slugifizierte ID wie gefordert: ticket_[eventId]_[reihe]_[platz]
-    const ticketId = `ticket_${eventId}_${selectedSeat.id}`;
-    
     try {
-      await setDoc(doc(db, `apps/${APP_ID}/bookings`, ticketId), {
-        eventId,
+      await createBooking(eventId, [selectedSeat.id], {
         customerData: {
           name: customerName,
           email: 'abendkasse@mozarthaus.at'
@@ -51,9 +78,8 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
         source: 'boxoffice',
         status: 'paid',
         paymentMethod,
-        seatIds: [selectedSeat.id],
         totalAmount: priceMapping[priceCategory] || 69,
-        createdAt: serverTimestamp()
+        categoryName: selectedSeat.category === 'A' ? 'Category A' : 'Category B'
       });
       setSelectedSeat(null);
     } catch (err) {
@@ -72,7 +98,6 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
       
       {SEATING_PLAN_TEMPLATE.map((rowBlueprint) => (
         <div key={rowBlueprint.rowId} className="flex flex-row justify-center items-center gap-1.5 w-full">
-          {/* Left Label */}
           <div className="w-6 flex-shrink-0 text-center font-bold text-gray-500 text-sm">
             {rowBlueprint.rowId}
           </div>
@@ -80,48 +105,49 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
           <div className="flex flex-row gap-1.5 justify-center items-center">
             {rowBlueprint.elements.map((el, i) => {
               if (el.type === 'spacer') {
-                const missingSeats = el.width;
-                const spacerWidth = (missingSeats * 1.5) + ((missingSeats - 1) * 0.375); // based on w-6 (1.5rem) and gap-1.5 (0.375rem)
+                const spacerWidth = (el.width * 1.5) + ((el.width - 1) * 0.375);
                 return <div key={`spacer-${rowBlueprint.rowId}-${i}`} style={{ width: `${spacerWidth}rem`, flexShrink: 0 }} />;
               }
               
-              const isBooked = bookedSeatIds.includes(el.id);
+              const isBooked = !!seating[el.id]?.bookingId;
+              const category = seating[el.id]?.category || 'B';
               
               return (
                 <button 
                   key={el.id}
-                  disabled={isBooked}
-                  onClick={() => openQuickSell(el.id)}
-                  className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors print:w-5 print:h-5 ${
-                    isBooked 
-                      ? 'border-brand-primary bg-brand-primary/10 cursor-not-allowed print:border-black print:bg-black' 
-                      : 'border-gray-300 bg-white hover:border-brand-primary/50 cursor-pointer print:border-gray-400'
-                  }`}
-                  title={el.id.replace(/row_|_seat_/g, ' ').toUpperCase()}
+                  disabled={isBooked || readOnly}
+                  onClick={() => !readOnly && openQuickSell(el.id)}
+                  className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors print:w-5 print:h-5 ${getSeatColor(el.id)} ${isBooked || readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  title={`${el.id.replace(/row_|_seat_/g, ' ').toUpperCase()} (Cat ${category})`}
                 >
                   {isBooked ? (
-                    <div className="w-2.5 h-2.5 rounded-full bg-brand-primary print:hidden"></div>
+                    <div className={`w-2.5 h-2.5 rounded-full ${getDotColor(category)} print:hidden`}></div>
                   ) : null}
                 </button>
               );
             })}
           </div>
 
-          {/* Right Label */}
           <div className="w-6 flex-shrink-0 text-center font-bold text-gray-500 text-sm">
             {rowBlueprint.rowId}
           </div>
         </div>
       ))}
       
-      <div className="mt-6 flex items-center gap-6 text-sm text-gray-600 font-medium">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-gray-300 rounded bg-white"></div> Frei
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-brand-primary bg-brand-primary/10 rounded flex items-center justify-center print:border-black print:bg-black">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-primary print:hidden"></div>
-          </div> Gebucht
+      <div className="mt-8 flex flex-col items-center gap-4">
+        <div className="flex flex-wrap justify-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-gray-300 rounded bg-white"></div> Frei
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-[#D4AF37]"></div> Kat. A (Reihe A-C)
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-[#1E3A8A]"></div> Kat. B (Reihe D-F)
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-[#10B981]"></div> Student
+          </div>
         </div>
       </div>
 
@@ -136,9 +162,12 @@ export function SeatingChartVisual({ eventId, bookedSeatIds }: Props) {
             </div>
             <form onSubmit={handleSell} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ausgewählter Platz</label>
-                <div className="p-2 bg-gray-50 border border-gray-200 rounded font-medium text-gray-900 text-center">
-                  {selectedSeat.name}
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Platz & Kategorie</label>
+                <div className="p-2 bg-gray-50 border border-gray-200 rounded font-medium text-gray-900 text-center flex justify-between items-center">
+                  <span>{selectedSeat.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full text-white ${getDotColor(selectedSeat.category)}`}>
+                    KATEGORIE {selectedSeat.category}
+                  </span>
                 </div>
               </div>
               <div>

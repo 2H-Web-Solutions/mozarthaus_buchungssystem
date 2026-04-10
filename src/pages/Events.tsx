@@ -7,77 +7,36 @@ import { Event } from '../types/schema';
 
 function EventOccupancy({ eventId }: { eventId: string }) {
   const [data, setData] = useState({
-    docOccupied: 0,
-    docTotal: 0,
-    seatsBooked: 0,
-    totalSeats: 0,
-    groupTickets: 0
+    occupied: 0,
+    total: 0
   });
 
   useEffect(() => {
-    // 1. Listen to event document for manual/synced counts
+    // Listen to event document for the seating map and capacity
     const unsubEvent = onSnapshot(doc(db, `apps/${APP_ID}/events`, eventId), (snap) => {
       const d = snap.data();
-      setData(prev => ({ 
-        ...prev, 
-        docOccupied: d?.occupied || 0, 
-        docTotal: d?.totalCapacity || 0 
-      }));
-    });
+      if (!d) return;
 
-    // 2. Listen to physical seats
-    const unsubSeats = onSnapshot(collection(db, `apps/${APP_ID}/events/${eventId}/seats`), (snap) => {
-      let total = 0;
-      let booked = 0;
-      snap.forEach(d => {
-        total++;
-        if (d.data().status !== 'available') booked++;
+      const seating = d.seating || {};
+      const occupiedPhysical = Object.values(seating).filter((s: any) => !!s.bookingId).length;
+      
+      setData({ 
+        occupied: occupiedPhysical, 
+        total: d.totalCapacity || Object.keys(seating).length || 67
       });
-      setData(prev => ({ ...prev, seatsBooked: booked, totalSeats: total }));
     });
 
-    // 3. Listen to all related bookings (Manual & Synced)
-    const q = query(
-      collection(db, `apps/${APP_ID}/bookings`), 
-      or(
-        where('eventId', '==', eventId),
-        where('eventDocId', '==', eventId)
-      )
-    );
-    
-    const unsubBookings = onSnapshot(q, (snap) => {
-      let group = 0;
-      snap.forEach(bDoc => {
-        const b = bDoc.data();
-        if (b.status === 'cancelled') return;
-
-        if (!b.seatIds || b.seatIds.length === 0) {
-          if (b.groupPersons) group += b.groupPersons;
-          else if (b.tickets) b.tickets.forEach((t: any) => group += (t.quantity || 1));
-          else if (b.lastPayload?.qty) group += Number(b.lastPayload.qty);
-        }
-      });
-      setData(prev => ({ ...prev, groupTickets: group }));
-    });
-
-    return () => {
-      unsubEvent();
-      unsubSeats();
-      unsubBookings();
-    };
+    return () => unsubEvent();
   }, [eventId]);
 
-  const total = data.totalSeats || data.docTotal;
-  if (total === 0) return <span className="text-gray-400 text-sm">-</span>;
+  if (data.total === 0) return <span className="text-gray-400 text-sm">-</span>;
 
-  // Prioritize the highest count to ensure sync discrepancies are visible
-  const booked = Math.max(data.seatsBooked + data.groupTickets, data.docOccupied);
-  const percentage = Math.round((booked / total) * 100) || 0;
+  const percentage = Math.round((data.occupied / data.total) * 100) || 0;
   
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
-        {booked} / {total}
+        {data.occupied} / {data.total}
       </span>
       <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
         <div 

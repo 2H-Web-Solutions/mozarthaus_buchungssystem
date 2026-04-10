@@ -154,11 +154,11 @@ export function EventBelegungsplan() {
                 Saalplan
             </div>
             <span className="text-sm font-bold bg-brand-red text-white px-3 py-1 rounded-full shadow-lg shadow-brand-red/10 animate-pulse">
-                {totalBooked} / {event.totalCapacity || 67} Belegt
+                {Object.values(event.seating || {}).filter(s => !!s.bookingId).length} / {event.totalCapacity || 67} Belegt
             </span>
           </h2>
           <div className="glass-card p-4">
-            <SeatingChartVisual eventId={eventId!} bookedSeatIds={bookedSeatIds} />
+            <SeatingChartVisual eventId={eventId!} seating={event.seating} readOnly={true} />
           </div>
         </div>
         
@@ -177,7 +177,7 @@ export function EventBelegungsplan() {
         <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">Detaillierte Teilnehmerliste</h2>
         </div>
-        <EventBookingTable bookings={bookings} />
+        <EventBookingTable bookings={bookings} seating={event.seating || {}} />
       </div>
 
       <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100/50 print:hidden">

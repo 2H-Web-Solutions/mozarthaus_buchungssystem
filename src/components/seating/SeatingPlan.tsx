@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { SEATING_PLAN_TEMPLATE } from '../../config/seatingPlan';
 import { Seat, Booking, TicketCategory } from '../../types/schema';
 import { SeatButton } from './SeatButton';
-import { getEventSeats, initializeEventSeats } from '../../services/bookingService';
+import { getEventSeating, initializeEventSeats } from '../../services/bookingService';
 import { X } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -12,9 +12,10 @@ import { listenTicketCategories } from '../../services/firebase/pricingService';
 interface Props {
   eventId: string;
   onSelectionChange: (selectedSeatIds: string[], seatsMap: Map<string, Seat>) => void;
+  readOnly?: boolean;
 }
 
-export function SeatingPlan({ eventId, onSelectionChange }: Props) {
+export function SeatingPlan({ eventId, onSelectionChange, readOnly = false }: Props) {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,7 +26,18 @@ export function SeatingPlan({ eventId, onSelectionChange }: Props) {
 
   useEffect(() => {
     // 1. Fetch from subcollection in real-time
-    const unsub = getEventSeats(eventId, async (fetchedSeats) => {
+    const unsub = getEventSeating(eventId, async (eventData) => {
+      const fetchedSeating = eventData?.seating || {};
+      
+      const fetchedSeats: Seat[] = Object.entries(fetchedSeating).map(([id, s]: [string, any]) => ({
+        id,
+        eventId,
+        row: s.row,
+        number: s.number,
+        status: s.bookingId ? 'sold' : 'available',
+        bookingId: s.bookingId
+      }));
+
       // Auto-fallback: If no seats exist for this event, generate them on the fly!
       if (fetchedSeats.length === 0) {
         setIsLoading(true);
@@ -35,7 +47,7 @@ export function SeatingPlan({ eventId, onSelectionChange }: Props) {
           console.error("Failed to auto-initialize seats:", err);
           setIsLoading(false);
         }
-        return; // The DB will trigger this snapshot callback again once seats are created.
+        return; 
       }
 
       setSeats(fetchedSeats);
@@ -81,6 +93,7 @@ export function SeatingPlan({ eventId, onSelectionChange }: Props) {
   }, [eventId]);
 
   const toggleSeat = (seatId: string) => {
+    if (readOnly) return;
     setSelectedSeatIds(prev => {
       const next = prev.includes(seatId) 
         ? prev.filter(id => id !== seatId) 

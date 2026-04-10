@@ -137,7 +137,7 @@ export function EventDetails() {
           </div>
         </div>
         <div className="flex-1 p-6 overflow-y-auto bg-gray-50/50">
-          <SeatingPlan eventId={event.id} onSelectionChange={handleSelectionChange} />
+          <SeatingPlan eventId={event.id} onSelectionChange={handleSelectionChange} readOnly={true} />
         </div>
       </div>
 

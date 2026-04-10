@@ -57,8 +57,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const e = recentEvents[i];
     const capacity = e.totalCapacity || 67;
     
-    // Use doc-level 'occupied' field (updated by sync/webhooks)
-    const occupied = e.occupied || 0;
+    const seating = e.seating || {};
+    const occupied = Object.values(seating).filter((s: any) => !!s.bookingId).length;
+    
     occupancySum += (occupied / capacity) * 100;
     eventOccupancyCount++;
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { Seat } from '../../types/schema';
@@ -31,24 +31,36 @@ export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, c
     if (!eventId) return;
     setIsLoading(true);
 
-    const q = query(collection(db, `apps/${APP_ID}/events/${eventId}/seats`));
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      if (snapshot.empty) {
+    const eventRef = doc(db, `apps/${APP_ID}/events`, eventId);
+    const unsubscribe = onSnapshot(eventRef, async (snap) => {
+      if (!snap.exists()) {
+        setIsLoading(false);
+        return;
+      }
+
+      const data = snap.data();
+      if (!data.seating) {
         if (!isInitializing) {
           setIsInitializing(true);
           try {
-            // Hot-init proxy for missing event structures
             await initializeEventSeats(eventId);
           } catch (err) {
-            console.error('Bootstrapping seat map blueprint failed', err);
+            console.error('Bootstrapping seat map failed', err);
           } finally {
             setIsInitializing(false);
           }
         }
       } else {
         const seatMap: Record<string, Seat> = {};
-        snapshot.forEach(doc => {
-          seatMap[doc.id] = doc.data() as Seat;
+        Object.entries(data.seating).forEach(([id, seat]: [string, any]) => {
+          seatMap[id] = {
+            id,
+            row: seat.row,
+            number: seat.number,
+            status: seat.bookingId ? 'sold' : 'available',
+            eventId,
+            bookingId: seat.bookingId
+          };
         });
         setSeats(seatMap);
         setIsLoading(false);
@@ -149,7 +161,17 @@ export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, c
                       btnStyle = getSeatColorStyle(s.id);
                       btnClass += `text-white shadow-lg transform scale-110`;
                     } else if (isAvailable) {
-                      btnClass += "bg-white border-2 border-gray-300 text-gray-700 hover:border-brand-primary hover:text-brand-primary cursor-pointer active:scale-95";
+                      // Show category border/bg for unoccupied seats
+                      const category = SEATING_PLAN_TEMPLATE.find(r => r.rowId === rowConfig.rowId)
+                        ?.elements.find(e => e.type === 'seat' && e.id === s.id) as any;
+                      const cat = category?.category || 'B';
+                      
+                      let catClass = "border-gray-300 bg-white hover:border-brand-primary";
+                      if (cat === 'A') catClass = "border-[#D4AF37] bg-white hover:bg-[#D4AF37]/5";
+                      else if (cat === 'B') catClass = "border-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5";
+                      else if (cat === 'STUDENT') catClass = "border-[#10B981] bg-white hover:bg-[#10B981]/5";
+
+                      btnClass += `${catClass} border-2 text-gray-700 hover:text-brand-primary cursor-pointer active:scale-95`;
                     } else {
                       btnClass += "bg-gray-200 border border-gray-300 text-gray-400 cursor-not-allowed opacity-50";
                     }

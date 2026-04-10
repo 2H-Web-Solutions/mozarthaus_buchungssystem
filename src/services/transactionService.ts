@@ -1,7 +1,7 @@
 import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
-import { Booking, Seat } from '../types/schema';
+import { Booking } from '../types/schema';
 
 const generateBookingId = () => {
   const prefix = 'RES';
@@ -19,7 +19,6 @@ async function getNextBookingNumber(transaction: any): Promise<string> {
 
   if (counterDoc.exists()) {
     const data = counterDoc.data();
-    // Wenn wir im selben Jahr sind, zähle weiter. Sonst fange bei 0 an.
     if (data.year === year) {
       currentNumber = data.lastNumber || 0;
     }
@@ -27,7 +26,6 @@ async function getNextBookingNumber(transaction: any): Promise<string> {
 
   const nextNumber = currentNumber + 1;
   
-  // Speichere den neuen Stand
   transaction.set(counterRef, {
     year: year,
     lastNumber: nextNumber
@@ -46,36 +44,30 @@ export async function executeBookingTransaction(
 ): Promise<string> {
   const bookingId = generateBookingId();
   const bookingRef = doc(db, `apps/${APP_ID}/bookings`, bookingId);
-  const seatsColPath = `apps/${APP_ID}/events/${bookingData.eventId}/seats`;
-
-  let createdBooking: Booking | null = null;
+  const eventRef = doc(db, `apps/${APP_ID}/events`, bookingData.eventId);
 
   try {
     await runTransaction(db, async (transaction) => {
-      // Nur für Einzelbuchungen und Gruppenbuchungen Sitzplätze prüfen und blockieren
+      // 1. Get Event to check seating map
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists()) throw new Error('Event not found');
+      
+      const eventData = eventDoc.data();
+      const seating = eventData.seating || {};
+      const updatedSeating = { ...seating };
+
+      // Phase 1: Validate and block seats if applicable
       if ((bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') && selectedSeatIds.length > 0) {
-        // Phase 1: Read lock targeting specific seat docs
-        const seatRefs = selectedSeatIds.map(id => doc(db, seatsColPath, id));
-        const seatDocs = await Promise.all(seatRefs.map(ref => transaction.get(ref)));
-
-        // Phase 2: Validate consistency
-        for (const snap of seatDocs) {
-          if (!snap.exists()) {
-            throw new Error(`Sitzplatz ${snap.id} existiert im System nicht.`);
+        for (const seatId of selectedSeatIds) {
+          if (!updatedSeating[seatId]) {
+            throw new Error(`Sitzplatz ${seatId} existiert im System nicht.`);
           }
-          const seatData = snap.data() as Seat;
-          if (seatData.status !== 'available') {
-            throw new Error(`Ticket-Konflikt: Platz Reihe ${seatData.row} - Sitz ${seatData.number} wurde vor wenigen Sekunden vergeben.`);
+          if (updatedSeating[seatId].bookingId) {
+            throw new Error(`Ticket-Konflikt: Platz Reihe ${updatedSeating[seatId].row} - Sitz ${updatedSeating[seatId].number} wurde bereits vergeben.`);
           }
+          // Reserve the seat
+          updatedSeating[seatId].bookingId = bookingId;
         }
-
-        // Phase 3: Mutations (Data Write)
-        seatRefs.forEach(ref => {
-          transaction.update(ref, {
-            status: 'sold',
-            bookingId: bookingId
-          });
-        });
       }
 
       const generatedBookingNumber = await getNextBookingNumber(transaction);
@@ -89,8 +81,6 @@ export async function executeBookingTransaction(
         createdAt: Timestamp.now()
       };
 
-      // Firestore erlaubt keine "undefined" Werte.
-      // Wir entfernen alle undefined-Felder rekursiv aus dem Objekt.
       const sanitizeForFirestore = (obj: any): any => {
         if (obj === null || typeof obj !== 'object' || obj instanceof Timestamp) return obj;
         if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
@@ -104,13 +94,11 @@ export async function executeBookingTransaction(
       };
 
       const sanitizedBooking = sanitizeForFirestore(newBooking);
+      
+      // Atomic updates
+      transaction.update(eventRef, { seating: updatedSeating });
       transaction.set(bookingRef, sanitizedBooking);
-      createdBooking = sanitizedBooking; // Für n8n
     });
-
-    if (createdBooking) {
-      // n8n sync trigger removed per user request
-    }
 
     return bookingId;
   } catch (error) {
