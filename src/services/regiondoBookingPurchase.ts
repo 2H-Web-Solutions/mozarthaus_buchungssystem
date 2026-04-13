@@ -28,7 +28,7 @@ export async function purchaseWithRegiondo(params: {
 
     items.push({
       product_id: Number(productId),
-      option_id: Number(cat.regiondoOptionId),
+      option_id: cat.regiondoOptionId as any,
       date_time: dateTime,
       qty: cat.quantity
     });

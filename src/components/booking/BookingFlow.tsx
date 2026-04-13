@@ -146,9 +146,11 @@ export function BookingFlow() {
         const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
         
         let regiondoResult = null;
-        if (bookingType === 'einzel' && selectedEvent?.regiondoId) {
-          // Handle Regiondo Purchase
-          const eventDateRaw = selectedEvent.date;
+        if (bookingType === 'einzel') {
+          // Force Product ID 23941 for Mozart Ensemble
+          const productId = '23941';
+          
+          const eventDateRaw = selectedEvent?.date;
           const dateYmd = eventDateRaw 
             ? (typeof (eventDateRaw as any).toDate === 'function' 
                 ? (eventDateRaw as any).toDate().toISOString().split('T')[0] 
@@ -160,13 +162,13 @@ export function BookingFlow() {
             .map(c => ({
               name: c.name,
               quantity: quantities[c.id],
-              regiondoOptionId: c.regiondoOptionId
+              regiondoOptionId: c.regiondoOptionId // Using the specific numeric mapping from ticket_categories
             }));
 
           regiondoResult = await purchaseWithRegiondo({
-            productId: selectedEvent.regiondoId,
+            productId,
             dateYmd,
-            time: selectedEvent.time || '19:00', // Default if missing
+            time: selectedEvent?.time || '15:00',
             categories: regiondoCats,
             customerData: {
               name: customerName,
@@ -177,34 +179,37 @@ export function BookingFlow() {
           console.log("Regiondo Purchase Success:", regiondoResult);
         }
 
-        const tickets = bookingType === 'einzel' ? categories
-          .filter(c => (quantities[c.id] || 0) > 0)
-          .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
+        // Only register in Firestore if it's NOT a Regiondo website booking.
+        // Standard bookings are synced automatically via webhook.
+        if (!regiondoResult) {
+          const tickets = bookingType === 'einzel' ? categories
+            .filter(c => (quantities[c.id] || 0) > 0)
+            .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
 
-        const eventDateRaw = selectedEvent?.date;
-        const finalEventDateStr = eventDateRaw 
-          ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
-          : '';
+          const eventDateRaw = selectedEvent?.date;
+          const finalEventDateStr = eventDateRaw 
+            ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
+            : '';
 
-        await executeBookingTransaction({
-          eventId: selectedEventId,
-          variantId: selectedEventId.split('_')[0] || '',
-          eventTitle: selectedEvent?.title || '',
-          eventDate: finalEventDateStr,
-          partnerId: selectedPartnerId || null,
-          isB2B: !!selectedPartnerId,
-          source: selectedPartnerId ? 'b2b' : (regiondoResult ? 'website' : 'manual'),
-          status: regiondoResult ? 'confirmed' : 'pending', // Regiondo purchases are pre-paid/confirmed
-          bookingType,
-          sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
-          contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
-          groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
-          customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
-          tickets,
-          customerData: { name: customerName, email: customerEmail, phone: customerPhone },
-          totalAmount: regiondoResult?.grandTotal || totalPrice,
-          lastPayload: regiondoResult || undefined, // Store Regiondo result
-        }, []);
+          await executeBookingTransaction({
+            eventId: selectedEventId,
+            variantId: selectedEventId.split('_')[0] || '',
+            eventTitle: selectedEvent?.title || '',
+            eventDate: finalEventDateStr,
+            partnerId: selectedPartnerId || null,
+            isB2B: !!selectedPartnerId,
+            source: selectedPartnerId ? 'b2b' : 'manual',
+            status: 'pending',
+            bookingType,
+            sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
+            contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
+            groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
+            customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
+            tickets,
+            customerData: { name: customerName, email: customerEmail, phone: customerPhone },
+            totalAmount: totalPrice,
+          }, []);
+        }
       }
       
       setSuccess(true);
