@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { executeBookingTransaction } from '../../services/transactionService';
 import { Event, TicketCategory } from '../../types/schema';
 import { listenTicketCategories } from '../../services/firebase/pricingService';
 import { SeatMap } from './SeatMap';
+import { createPrivateReservation } from '../../services/privateReservationService';
 import { CalendarDays, Ticket, Building2, ChevronRight, CheckCircle2, Users, User, UsersRound } from 'lucide-react';
 
 export function BookingFlow() {
@@ -30,6 +31,7 @@ export function BookingFlow() {
   
   const [privateEventDate, setPrivateEventDate] = useState('');
   const [privateEventTime, setPrivateEventTime] = useState('');
+  const [privateEventTitle, setPrivateEventTitle] = useState('Mozart Ensemble');
   
   // Section 3
   const [categories, setCategories] = useState<TicketCategory[]>([]);
@@ -127,7 +129,6 @@ export function BookingFlow() {
   }));
 
   const handleSubmit = async () => {
-    if (!selectedEventId) return alert("Bitte wähle ein Konzert aus.");
     
     if (bookingType === 'einzel') {
       if (totalTickets === 0) return alert("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
@@ -150,60 +151,51 @@ export function BookingFlow() {
 
     setIsSubmitting(true);
     try {
-      const tickets = bookingType === 'einzel' ? categories
-        .filter(c => (quantities[c.id] || 0) > 0)
-        .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
-
-      const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
-
-      let finalEventId = selectedEventId;
-      let finalVariantId = variant;
-      let finalEventTitle = selectedEvent?.title || '';
-      let finalEventDateStr = '';
-
       if (bookingType === 'privat') {
-        // Generiere eine lesbare, slugifizierte ID für das neue Event
-        finalEventId = `privat_${privateEventDate.replace(/-/g, '_')}_${privateEventTime.replace(':', '')}`;
-        finalVariantId = 'privat';
-        finalEventTitle = `Privat Event - ${customerName}`;
-        finalEventDateStr = `${privateEventDate}T${privateEventTime}:00.000Z`;
-        
-        // Neues Event-Dokument on-the-fly in Firestore anlegen
-        await setDoc(doc(db, `apps/${APP_ID}/events`, finalEventId), {
-          title: finalEventTitle,
+        const result = await createPrivateReservation({
+          title: privateEventTitle || `Privat Event - ${customerName}`,
           date: privateEventDate,
           time: privateEventTime,
-          status: 'active',
-          type: 'privat'
+          customerName,
+          customerEmail,
+          customerPhone,
+          guestCount: Number(groupPersons),
+          totalPrice: Number(customTotalPrice)
         });
+        console.log("Private Reservation Created:", result);
       } else {
+        const tickets = bookingType === 'einzel' ? categories
+          .filter(c => (quantities[c.id] || 0) > 0)
+          .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
+
+        const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
         const eventDateRaw = selectedEvent?.date;
-        finalEventDateStr = eventDateRaw 
+        const finalEventDateStr = eventDateRaw 
           ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
           : '';
-      }
 
-      await executeBookingTransaction({
-        eventId: finalEventId,
-        variantId: finalVariantId,
-        eventTitle: finalEventTitle,
-        eventDate: finalEventDateStr,
-        partnerId: selectedPartnerId || null,
-        isB2B: !!selectedPartnerId,
-        source: selectedPartnerId ? 'b2b' : 'manual',
-        status: 'pending', // Fest auf pending gesetzt, da keine Zahlung direkt im Flow
-        bookingType,
-        sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
-        contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
-        groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
-        customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
-        tickets,
-        customerData: { name: customerName, email: customerEmail, phone: customerPhone },
-        totalAmount: totalPrice,
-      }, (bookingType === 'einzel' || bookingType === 'gruppe') ? selectedSeats : []);
+        await executeBookingTransaction({
+          eventId: selectedEventId,
+          variantId: variant,
+          eventTitle: selectedEvent?.title || '',
+          eventDate: finalEventDateStr,
+          partnerId: selectedPartnerId || null,
+          isB2B: !!selectedPartnerId,
+          source: selectedPartnerId ? 'b2b' : 'manual',
+          status: 'pending',
+          bookingType,
+          sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
+          contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
+          groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
+          customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
+          tickets,
+          customerData: { name: customerName, email: customerEmail, phone: customerPhone },
+          totalAmount: totalPrice,
+        }, selectedSeats);
+      }
       
       setSuccess(true);
-      setTimeout(() => navigate('/bookings'), 3000);
+      setTimeout(() => navigate(bookingType === 'privat' ? '/kanban' : '/bookings'), 3000);
     } catch (err: any) {
       console.error(err);
       alert("Schwerer Fehler bei der Transaktion: " + (err?.message || JSON.stringify(err)));
@@ -216,9 +208,17 @@ export function BookingFlow() {
     return (
       <div className="max-w-3xl mx-auto mt-20 p-12 bg-white rounded-2xl shadow-xl text-center border border-gray-100 flex flex-col items-center">
          <CheckCircle2 className="w-24 h-24 text-green-500 mb-6 animate-in zoom-in" />
-         <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">Transaktion erfolgreich!</h2>
-         <p className="text-gray-500 text-lg">Die Reservierung wurde als "Pending" im Zentralsystem erfasst.</p>
-         <p className="text-sm text-gray-400 mt-6 animate-pulse">Sie werden zur Buchungsübersicht weitergeleitet...</p>
+         <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">
+           {bookingType === 'privat' ? 'Privatbuchung erfolgreich erstellt!' : 'Transaktion erfolgreich!'}
+         </h2>
+         <p className="text-gray-500 text-lg">
+           {bookingType === 'privat' 
+            ? 'Das Event und die entsprechende Buchung wurden im System angelegt.' 
+            : 'Die Reservierung wurde als "Pending" im Zentralsystem erfasst.'}
+         </p>
+         <p className="text-sm text-gray-400 mt-6 animate-pulse">
+           Sie werden zur {bookingType === 'privat' ? 'Live Status Übersicht' : 'Buchungsübersicht'} weitergeleitet...
+         </p>
       </div>
     );
   }
@@ -251,7 +251,11 @@ export function BookingFlow() {
         
         <div className="grid grid-cols-1 gap-6">
           {bookingType === 'privat' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-1">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Event-Titel (z.B. Firmenevent ABC)</label>
+                <input type="text" placeholder="Privatkonzert" value={privateEventTitle} onChange={e => setPrivateEventTitle(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none shadow-sm" />
+              </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Datum des Privat-Events</label>
                 <input type="date" value={privateEventDate} onChange={e => setPrivateEventDate(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none shadow-sm" />

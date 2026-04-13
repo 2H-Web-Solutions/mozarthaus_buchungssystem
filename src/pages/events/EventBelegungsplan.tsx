@@ -40,26 +40,39 @@ export function EventBelegungsplan() {
       setMusikerList(list);
     });
 
-    // 3. Fetch all Bookings for this Event (Handling both manual and synced field names)
-    const q = query(
+    // 3. Fetch all Bookings for this Event (Handling both collections)
+    const bookingsQ = query(
       collection(db, `apps/${APP_ID}/bookings`), 
-      or(
-        where('eventId', '==', eventId),
-        where('eventDocId', '==', eventId)
-      )
+      or(where('eventId', '==', eventId), where('eventDocId', '==', eventId))
+    );
+    const privateQ = query(
+      collection(db, `apps/${APP_ID}/privatebooking`),
+      or(where('eventId', '==', eventId), where('eventDocId', '==', eventId))
     );
     
-    const unsubBookings = onSnapshot(q, (snap) => {
-      const bList: Booking[] = [];
-      snap.forEach(d => bList.push({ id: d.id, ...d.data() } as Booking));
-      setBookings(bList);
+    let b1: Booking[] = [];
+    let b2: Booking[] = [];
+
+    const updateBookingsList = () => {
+      setBookings([...b1, ...b2]);
       setIsLoading(false);
+    };
+
+    const unsubB1 = onSnapshot(bookingsQ, (snap) => {
+      b1 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+      updateBookingsList();
+    });
+
+    const unsubB2 = onSnapshot(privateQ, (snap) => {
+      b2 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+      updateBookingsList();
     });
 
     return () => {
       unsubEvent();
       unsubMusiker();
-      unsubBookings();
+      unsubB1();
+      unsubB2();
     };
   }, [eventId, navigate]);
 
@@ -152,9 +165,16 @@ export function EventBelegungsplan() {
             <FileText className="w-10 h-10 text-brand-red opacity-90" />
             Belegungsplan
           </h1>
-          <p className="text-slate-500 font-bold mt-2 text-lg">
-            {event.title} <span className="text-slate-300 mx-3">|</span> {eventDateStr} {event.time || ''} Uhr
-          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-slate-500 font-bold text-lg">
+              {event.title} <span className="text-slate-300 mx-3">|</span> {eventDateStr} {event.time || ''} Uhr
+            </p>
+            {event.is_private && (
+              <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border border-amber-200">
+                Privat-Event
+              </span>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center gap-3">

@@ -24,6 +24,7 @@ export interface Event {
     number: number
   }>;
   occupied?: number;
+  is_private?: boolean;
 }
 
 
@@ -45,6 +46,7 @@ export interface Booking {
   isB2B: boolean;
   source: 'manual' | 'boxoffice' | 'phone' | 'website' | 'b2b';
   status: 'confirmed' | 'cancelled' | 'pending' | 'paid';
+  isPrivate?: boolean;
   paymentMethod?: 'bar' | 'karte' | 'voucher' | 'rechnung';
   seatIds?: string[];
   tickets?: { seatId?: string, categoryId: string, categoryName?: string, quantity?: number, price?: number }[];

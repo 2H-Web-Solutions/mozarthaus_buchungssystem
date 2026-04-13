@@ -38,30 +38,37 @@ export function BookingCard({ booking, index, partners }: { booking: Booking; in
           {...provided.dragHandleProps}
           className={`p-4 bg-white rounded-xl shadow-sm border ${snapshot.isDragging ? 'border-brand-primary ring-2 ring-brand-primary/20 scale-[1.02] shadow-xl' : 'border-gray-200 hover:border-gray-300'} transition-all cursor-grab active:cursor-grabbing`}
         >
-          <div className="flex justify-between items-start mb-3">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
             <button 
               onClick={handleCopy} 
-              className="text-xs font-mono text-gray-500 hover:text-brand-primary disabled:opacity-50 flex items-center gap-1.5 bg-gray-50 hover:bg-red-50 px-2 py-1 rounded transition-colors group"
+              className="text-xs font-mono text-gray-500 hover:text-brand-primary disabled:opacity-50 flex items-center gap-1.5 bg-gray-50 hover:bg-red-50 px-2 py-1 rounded transition-colors group shrink-0"
             >
-              <span className="truncate w-[100px]" title={booking.id}>{booking.id}</span>
+              <span className="truncate max-w-[80px]" title={booking.id}>{booking.id}</span>
               <Copy className="w-3 h-3 group-hover:scale-110 transition-transform" />
             </button>
             
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 ml-auto">
               <button
                 onClick={handleResendMail}
                 title="Bestätigung erneut senden"
-                className="text-gray-400 hover:text-blue-600 p-1 rounded-full hover:bg-blue-50 transition-colors"
+                className="text-gray-400 hover:text-blue-600 p-1 rounded-full hover:bg-blue-50 transition-colors shrink-0"
               >
                 <Mail className="w-4 h-4" />
               </button>
-              <span className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full font-bold ${
-                booking.status === 'paid' ? 'bg-green-100 text-green-700' : 
+              <span className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full font-bold shrink-0 ${
+                booking.status === 'paid' ? 'bg-green-100 text-green-700 border border-green-200' : 
                 booking.status === 'cancelled' ? 'bg-gray-100 text-gray-600' : 
                 'bg-blue-100 text-blue-700'
               }`}>
-                {booking.status === 'paid' && booking.paymentMethod ? booking.paymentMethod : '€ ' + booking.totalAmount.toFixed(2)}
+                {booking.status === 'paid' 
+                  ? (booking.paymentMethod?.toUpperCase() || 'BEZAHLT')
+                  : '€ ' + booking.totalAmount.toFixed(2)}
               </span>
+              {(booking.isPrivate || (booking as any).bookingType === 'privat') && (
+                <span className="text-[10px] uppercase font-black bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200 shrink-0 whitespace-nowrap">
+                  Privat
+                </span>
+              )}
             </div>
           </div>
 

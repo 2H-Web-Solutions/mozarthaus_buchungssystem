@@ -1,4 +1,4 @@
-import { doc, runTransaction, collection, onSnapshot } from 'firebase/firestore';
+import { doc, runTransaction, collection, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking } from '../types/schema';
@@ -7,22 +7,36 @@ import { Booking } from '../types/schema';
  * Real-time active subscription listener mapped across all standard client Bookings.
  */
 export function subscribeToBookings(callback: (bookings: Booking[]) => void) {
-  const colRef = collection(db, `apps/${APP_ID}/bookings`);
-  return onSnapshot(colRef, (snapshot) => {
-    const list: Booking[] = [];
-    snapshot.forEach(d => {
-      list.push({ ...d.data(), id: d.id } as Booking);
-    });
-    // Optional: Sort descending by natural date
-    list.sort((a, b) => {
+  const bookingsRef = collection(db, `apps/${APP_ID}/bookings`);
+  const privateRef = collection(db, `apps/${APP_ID}/privatebooking`);
+  
+  let allBookings: Booking[] = [];
+  let privateBookings: Booking[] = [];
+
+  const updateList = () => {
+    const combined = [...allBookings, ...privateBookings];
+    combined.sort((a, b) => {
       const timeB = (b.createdAt as any)?.toMillis ? (b.createdAt as any).toMillis() : new Date(b.createdAt as any || 0).getTime();
       const timeA = (a.createdAt as any)?.toMillis ? (a.createdAt as any).toMillis() : new Date(a.createdAt as any || 0).getTime();
       return timeB - timeA;
     });
-    callback(list);
-  }, (error) => {
-    console.error('Board Sync Failed:', error);
+    callback(combined);
+  };
+
+  const unsubBookings = onSnapshot(bookingsRef, (snapshot) => {
+    allBookings = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking));
+    updateList();
   });
+
+  const unsubPrivate = onSnapshot(privateRef, (snapshot) => {
+    privateBookings = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking));
+    updateList();
+  });
+
+  return () => {
+    unsubBookings();
+    unsubPrivate();
+  };
 }
 
 /**
@@ -33,8 +47,9 @@ export async function updateBookingStatus(
   newStatus: 'pending' | 'paid' | 'cancelled', 
   paymentMethod?: 'bar' | 'karte' | 'voucher' | 'rechnung'
 ): Promise<void> {
-
-  const bookingRef = doc(db, `apps/${APP_ID}/bookings`, bookingId);
+  const isPrivate = bookingId.startsWith('privat_');
+  const collectionName = isPrivate ? 'privatebooking' : 'bookings';
+  const bookingRef = doc(db, `apps/${APP_ID}/${collectionName}`, bookingId);
   let updatedBooking: Booking | null = null;
 
   try {
@@ -68,13 +83,15 @@ export async function updateBookingStatus(
       }
 
       // Commit finalized booking object state modification payload
-      const updates: Partial<Booking> = { 
+      const updates: any = { 
         status: newStatus,
-        updatedAt: new Date().toISOString()
+        updatedAt: Timestamp.now()
       };
+      
       if (paymentMethod) {
         updates.paymentMethod = paymentMethod;
       }
+      
       transaction.update(bookingRef, updates);
       updatedBooking = { ...bookingData, ...updates } as Booking;
     });
