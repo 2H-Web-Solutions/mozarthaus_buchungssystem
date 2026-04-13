@@ -122,12 +122,7 @@ export function EventBelegungsplan() {
             <Printer className="w-5 h-5" />
             DRUCKEN
           </button>
-          <button 
-            onClick={() => navigate(`/events/${event.id}`)}
-            className="px-6 py-3 bg-white text-slate-700 font-black border-2 border-slate-100 rounded-xl shadow-sm hover:border-brand-red/30 hover:bg-slate-50 transition-all transform active:scale-95"
-          >
-             KASSE ÖFFNEN
-          </button>
+
         </div>
       </div>
 

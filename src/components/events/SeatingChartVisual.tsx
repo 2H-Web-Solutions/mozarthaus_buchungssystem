@@ -36,18 +36,18 @@ export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: 
 
     // Occupied colors by category
     switch (seat.category) {
-      case 'A': return 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37]';
-      case 'B': return 'border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]';
-      case 'STUDENT': return 'border-[#10B981] bg-[#10B981]/10 text-[#10B981]';
+      case 'A': return 'border-[#BC6868] bg-[#BC6868]/10 text-[#BC6868]';
+      case 'B': return 'border-[#2D7FBD] bg-[#2D7FBD]/10 text-[#2D7FBD]';
+      case 'STUDENT': return 'border-[#96BF33] bg-[#96BF33]/10 text-[#96BF33]';
       default: return 'border-brand-primary bg-brand-primary/10';
     }
   };
 
   const getDotColor = (category: string) => {
     switch (category) {
-      case 'A': return 'bg-[#D4AF37]';
-      case 'B': return 'bg-[#1E3A8A]';
-      case 'STUDENT': return 'bg-[#10B981]';
+      case 'A': return 'bg-[#BC6868]';
+      case 'B': return 'bg-[#2D7FBD]';
+      case 'STUDENT': return 'bg-[#96BF33]';
       default: return 'bg-brand-primary';
     }
   };
@@ -142,13 +142,13 @@ export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: 
             <div className="w-4 h-4 border-2 border-gray-300 rounded bg-white"></div> Frei
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#D4AF37]"></div> Kat. A (Reihe A-C)
+            <div className="w-4 h-4 rounded bg-[#BC6868]"></div> Kat. A (Reihe A-C)
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#1E3A8A]"></div> Kat. B (Reihe D-F)
+            <div className="w-4 h-4 rounded bg-[#2D7FBD]"></div> Kat. B (Reihe D-F)
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#10B981]"></div> Student
+            <div className="w-4 h-4 rounded bg-[#96BF33]"></div> Student
           </div>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Tasks } from './pages/Tasks';
 import { Settings } from './pages/Settings';
 import { Events } from './pages/Events';
-import { EventDetails } from './pages/EventDetails';
+
 import { EventBelegungsplan } from './pages/events/EventBelegungsplan';
 import { Bookings } from './pages/Bookings';
 import { Kanban } from './pages/Kanban';
@@ -34,7 +34,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="events" element={<Events />} />
-          <Route path="events/:id" element={<EventDetails />} />
+
           <Route path="events/:eventId/belegungsplan" element={<EventBelegungsplan />} />
           <Route path="new-booking" element={<BookingFlow />} />
           <Route path="kanban" element={<Kanban />} />

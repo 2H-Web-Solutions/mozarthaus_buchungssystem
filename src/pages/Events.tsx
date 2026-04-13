@@ -56,7 +56,7 @@ export function Events() {
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<any, any> | null>(null);
   const [docHistory, setDocHistory] = useState<QueryDocumentSnapshot<any, any>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const PAGE_SIZE = 10;
+  const [pageSize, setPageSize] = useState(50);
 
   const navigate = useNavigate();
 
@@ -72,7 +72,7 @@ export function Events() {
       let q = query(
         collection(db, `apps/${APP_ID}/events`),
         orderBy('date', 'asc'),
-        limit(PAGE_SIZE)
+        limit(pageSize)
       );
 
       if (direction === 'next' && lastDoc) {
@@ -109,15 +109,29 @@ export function Events() {
   };
 
   useEffect(() => {
-    fetchEvents();
+    fetchEvents('initial');
     fetchTotalCount();
-  }, []);
+  }, [pageSize]);
 
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-heading text-brand-primary">Events & Konzerte</h1>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Anzeigen:</span>
+          <select 
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="bg-white border border-gray-200 rounded-lg py-1.5 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-brand-primary/20 transition-all cursor-pointer"
+          >
+            <option value={25}>25 pro Seite</option>
+            <option value={50}>50 pro Seite</option>
+            <option value={100}>100 pro Seite</option>
+            <option value={200}>200 pro Seite</option>
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -180,7 +194,7 @@ export function Events() {
             </button>
             <button
               onClick={() => fetchEvents('next')}
-              disabled={events.length < PAGE_SIZE || isLoading}
+              disabled={events.length < pageSize || isLoading}
               className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Weiter
@@ -189,8 +203,8 @@ export function Events() {
           <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Zeige <span className="font-medium">{(currentPage - 1) * PAGE_SIZE + 1}</span> bis{' '}
-                <span className="font-medium">{(currentPage - 1) * PAGE_SIZE + events.length}</span> von{' '}
+                Zeige <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> bis{' '}
+                <span className="font-medium">{(currentPage - 1) * pageSize + events.length}</span> von{' '}
                 <span className="font-medium">{totalEvents}</span> Events
               </p>
             </div>
@@ -209,7 +223,7 @@ export function Events() {
                 </span>
                 <button
                   onClick={() => fetchEvents('next')}
-                  disabled={events.length < PAGE_SIZE || isLoading}
+                  disabled={events.length < pageSize || isLoading}
                   className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                 >
                   <span className="sr-only">Weiter</span>
