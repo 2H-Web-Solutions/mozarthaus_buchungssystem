@@ -11,8 +11,8 @@ export function DashboardShell() {
       <div className="print:hidden">
         <Header />
       </div>
-      <main className="pl-64 pt-16 min-h-screen">
-        <div className="p-8">
+      <main className="pl-64 pt-16 min-h-screen print:pl-0 print:pt-0 print:p-0">
+        <div className="p-8 print:p-0">
           <Outlet />
         </div>
       </main>

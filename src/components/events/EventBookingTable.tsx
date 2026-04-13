@@ -111,18 +111,18 @@ export function EventBookingTable({ bookings, seating }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-gray-400">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none">
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:bg-white print:border-b-2 print:border-black">
         <h3 className="font-bold text-gray-900 print:text-xl uppercase tracking-wider text-xs">Buchungen ({groupedList.length})</h3>
       </div>
       <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full text-left text-sm whitespace-nowrap print:text-black">
           <thead className="bg-white">
-            <tr className="text-gray-400 font-bold uppercase tracking-widest border-b border-gray-200 text-[10px] print:text-black print:border-black">
-              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-black">Check-In</th>
-              <th className="p-4 w-32 text-center border-r border-gray-50 print:border-black">Plätze</th>
-              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-black">Anz.</th>
-              <th className="p-4 border-r border-gray-50 print:border-black">Teilnehmer</th>
+            <tr className="text-gray-400 font-bold uppercase tracking-widest border-b border-gray-200 text-[10px] print:text-black print:border-b-2 print:border-black">
+              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-r-2 print:border-black">Check-In</th>
+              <th className="p-4 w-32 text-center border-r border-gray-50 print:border-r-2 print:border-black">Plätze</th>
+              <th className="p-4 w-12 text-center border-r border-gray-50 print:border-r-2 print:border-black">Anz.</th>
+              <th className="p-4 border-r border-gray-50 print:border-r-2 print:border-black">Teilnehmer</th>
               <th className="p-4 border-r border-gray-50 print:border-black print:hidden">Vertrieb</th>
               <th className="p-4 border-r border-gray-50 print:border-black">Status</th>
               <th className="p-4 text-right border-r border-gray-50 print:border-black print:hidden">Summe</th>
@@ -137,7 +137,7 @@ export function EventBookingTable({ bookings, seating }: Props) {
               </tr>
             ) : (
               groupedList.map(item => (
-                <tr key={item.id} className={`transition-colors group print:border-b print:border-gray-300 ${item.isCheckedIn ? 'bg-green-50/40 opacity-70' : 'hover:bg-brand-primary/5'}`}>
+                <tr key={item.id} className={`transition-colors group border-b border-gray-100 print:border-b-2 print:border-black/30 print:bg-white ${item.isCheckedIn ? 'bg-green-50/40 opacity-70' : 'hover:bg-brand-primary/5'}`}>
                   <td className="p-4 text-center cursor-pointer print:hidden" onClick={() => toggleCheckIn(item.id, item.isCheckedIn)}>
                     <div className="flex justify-center">
                       {item.isCheckedIn ? (
@@ -148,9 +148,9 @@ export function EventBookingTable({ bookings, seating }: Props) {
                     </div>
                   </td>
                   {/* Print Checkbox */}
-                  <td className="hidden print:table-cell p-4 text-center border-r border-gray-100 border-black">
-                     <div className="w-5 h-5 border-2 border-black inline-block rounded-sm">
-                       {item.isCheckedIn && <div className="w-full h-full bg-black"></div>}
+                  <td className="hidden print:table-cell p-4 text-center border-r-2 border-black">
+                     <div className="w-6 h-6 border-2 border-black inline-block rounded-sm relative">
+                       {item.isCheckedIn && <div className="absolute inset-0.5 bg-black"></div>}
                      </div>
                   </td>
                   
@@ -187,8 +187,8 @@ export function EventBookingTable({ bookings, seating }: Props) {
                   <td className="p-4 text-gray-600 border-r border-gray-100 print:hidden">
                     <span className="font-bold uppercase tracking-wider text-xs text-gray-400">{item.paymentMethod}</span>
                   </td>
-                  <td className="p-4 text-gray-700 font-medium flex items-center gap-2">
-                    <span className="truncate max-w-[250px] block font-bold text-brand-primary uppercase text-[10px] tracking-tight">{item.categorySummary}</span>
+                  <td className="p-4 text-gray-700 font-medium flex items-center gap-2 print:border-none">
+                    <span className="truncate max-w-[250px] block font-bold text-brand-primary uppercase text-[10px] tracking-tight print:text-black">{item.categorySummary}</span>
                     <button
                       onClick={() => handleResendMail(item.id)}
                       title="Bestätigung & Ticket erneut senden"

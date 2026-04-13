@@ -86,15 +86,58 @@ export function EventBelegungsplan() {
   console.log("DEBUG: Bookings for this event:", bookings);
 
   return (
-    <div className="max-w-[1400px] mx-auto pb-12 print:pb-0 print:max-w-none px-4 md:px-8">
+    <div className="max-w-[1400px] mx-auto pb-12 print:pb-0 print:max-w-none print:w-full print:mx-0 print:px-0 print:py-0 px-4 md:px-8">
       
       {/* Print-Only Header */}
-      <div className="hidden print:block mb-8 border-b-2 border-black pb-4">
-        <h1 className="text-3xl font-bold font-heading text-black m-0 mb-1">{event.title}</h1>
-        <p className="text-xl text-black font-medium m-0">
-          {eventDateStr} | {event.time || ''} Uhr
-        </p>
-        <h2 className="text-xl font-bold mt-2 uppercase tracking-widest text-gray-500">Belegungs- & Abendkassenplan</h2>
+      <div className="hidden print:block mb-10 border-b-4 border-black pb-6 w-full">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h1 className="text-4xl font-black font-heading text-black m-0 mb-1">MOZARTHAUS VIENNA</h1>
+            <p className="text-2xl text-black font-bold m-0 uppercase tracking-tighter italic">Konzertsaal im Figaro-Haus</p>
+          </div>
+          <div className="text-right">
+             <h2 className="text-2xl font-black text-black uppercase tracking-widest border-2 border-black px-4 py-1">SEATING LIST</h2>
+             <p className="text-sm font-bold mt-1 text-gray-600">Stand: {new Date().toLocaleString('de-AT')}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-8 mt-6">
+          <div className="space-y-2">
+            <p className="text-lg text-black font-medium border-l-4 border-black pl-3">
+              <span className="text-gray-400 font-black uppercase text-xs block tracking-widest">EVENT</span>
+              {event.title}
+            </p>
+            <p className="text-lg text-black font-medium border-l-4 border-black pl-3">
+              <span className="text-gray-400 font-black uppercase text-xs block tracking-widest">DATUM & UHRZEIT</span>
+              {eventDateStr} | {event.time || ''} Uhr
+            </p>
+          </div>
+          
+          <div className="bg-gray-50 border-2 border-dashed border-gray-300 p-4 rounded-xl flex items-center justify-around">
+            <div className="text-center">
+              <span className="text-[10px] font-black uppercase text-gray-500 block">Belegung</span>
+              <p className="text-2xl font-black text-black">
+                {Math.round((Object.values(event.seating || {}).filter(s => !!s.bookingId).length / (event.totalCapacity || 67)) * 100)}%
+              </p>
+            </div>
+            <div className="w-px h-10 bg-gray-200"></div>
+            <div className="text-center">
+              <span className="text-[10px] font-black uppercase text-gray-500 block">Teilnehmer</span>
+              <p className="text-2xl font-black text-black">
+                {Object.values(event.seating || {}).filter(s => !!s.bookingId).length} / {event.totalCapacity || 67}
+              </p>
+            </div>
+            <div className="w-px h-10 bg-gray-200"></div>
+            <div className="text-center">
+               <span className="text-[10px] font-black uppercase text-gray-500 block">Tickets</span>
+               <div className="flex gap-2 text-xs font-bold text-gray-600 mt-1">
+                 <span>A: {Object.values(event.seating || {}).filter(s => s.category === 'A' && !!s.bookingId).length}</span>
+                 <span>B: {Object.values(event.seating || {}).filter(s => s.category === 'B' && !!s.bookingId).length}</span>
+                 <span className="text-green-700">S: {Object.values(event.seating || {}).filter(s => s.category === 'STUDENT' && !!s.bookingId).length}</span>
+               </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden pt-8">
@@ -122,14 +165,13 @@ export function EventBelegungsplan() {
             <Printer className="w-5 h-5" />
             DRUCKEN
           </button>
-
         </div>
       </div>
 
-      {/* restored Seating Chart and Musician sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-8 print:block print:w-full print:mt-2 print:mb-4">
-        {/* Left: Visueller Saalplan */}
-        <div className="flex flex-col gap-3 print:mb-8 print:w-1/2 print:mx-auto">
+      {/* Page 1: Seating Chart & Musicians (Stacked in print) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-8 print:flex print:flex-col print:gap-8 print:w-full print:mt-2 print:mb-0">
+        {/* Left/Top: Visueller Saalplan */}
+        <div className="flex flex-col gap-3 print:w-full print:items-center">
           <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center justify-between px-2 print:hidden mb-2">
             <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-gray-400" />
@@ -139,25 +181,25 @@ export function EventBelegungsplan() {
                 {Object.values(event.seating || {}).filter(s => !!s.bookingId).length} / {event.totalCapacity || 67} Belegt
             </span>
           </h2>
-          <div className="glass-card p-4">
+          <div className="glass-card p-4 print:p-0 print:border-none print:shadow-none print:w-full">
             <SeatingChartVisual eventId={eventId!} seating={event.seating} readOnly={true} />
           </div>
         </div>
         
-        {/* Right: Musiker & Dienstplan */}
-        <div className="flex flex-col gap-3 print:hidden">
-          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2 mb-2">
-            <Music className="w-5 h-5 text-gray-400" />
-            Dienstplan
+        {/* Right/Bottom: Musiker & Dienstplan */}
+        <div className="flex flex-col gap-3 print:w-full print:mt-4">
+          <h2 className="text-xl font-heading font-bold text-gray-900 flex items-center gap-2 px-2 mb-2 print:text-black print:uppercase print:tracking-widest print:text-sm print:font-black print:border-b-2 print:border-black print:pb-1">
+            <Music className="w-5 h-5 text-gray-400 print:hidden" />
+            Ensemble & Musiker Gagen
           </h2>
           <EventMusikerAssignment event={event} musikerList={musikerList} />
         </div>
       </div>
 
-      {/* Main Content: Booking Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">Detaillierte Teilnehmerliste</h2>
+      {/* Page 2: Participant List */}
+      <div className="glass-card overflow-hidden print:break-before print:mt-0 mt-8">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between print:bg-white print:border-b-2 print:border-black print:py-4">
+            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest print:text-black print:text-lg">Detaillierte Teilnehmerliste</h2>
         </div>
         <EventBookingTable bookings={bookings} seating={event.seating || {}} />
       </div>

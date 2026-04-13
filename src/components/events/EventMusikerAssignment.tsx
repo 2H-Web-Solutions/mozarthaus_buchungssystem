@@ -51,12 +51,13 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-      <h3 className="text-lg font-heading font-bold text-gray-900 mb-4 border-b border-gray-100 pb-2">
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 print:p-0 print:border-none print:shadow-none">
+      <h3 className="text-lg font-heading font-bold text-gray-900 mb-4 border-b border-gray-100 pb-2 print:hidden">
         Ensemble & Musiker Gagen
       </h3>
       
-      <div className="space-y-3 mb-6">
+      {/* Web View: Interactive Forms */}
+      <div className="space-y-3 mb-6 print:hidden">
         {rows.map((row, index) => (
           <div key={index} className="flex items-center gap-3">
             <span className="w-6 font-bold text-gray-400 text-sm">{index + 1}.</span>
@@ -100,10 +101,46 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
         ))}
       </div>
 
+      {/* Print View: Read-only Table */}
+      <div className="hidden print:block">
+        <table className="w-full border-2 border-black">
+          <thead>
+            <tr className="bg-gray-100 border-b-2 border-black">
+              <th className="p-2 text-left text-xs font-black uppercase border-r-2 border-black w-10">Nr.</th>
+              <th className="p-2 text-left text-xs font-black uppercase border-r-2 border-black">Musiker Name</th>
+              <th className="p-2 text-left text-xs font-black uppercase border-r-2 border-black">Instrument</th>
+              <th className="p-2 text-right text-xs font-black uppercase w-32">Gage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.filter(r => !!r.musikerId).map((row, index) => (
+              <tr key={index} className="border-b border-black">
+                <td className="p-2 text-sm font-bold border-r-2 border-black">{index + 1}.</td>
+                <td className="p-2 text-sm font-black border-r-2 border-black">
+                  {musikerList.find(m => m.id === row.musikerId)?.vorname} {musikerList.find(m => m.id === row.musikerId)?.nachname}
+                </td>
+                <td className="p-2 text-sm font-bold border-r-2 border-black">
+                  {musikerList.find(m => m.id === row.musikerId)?.instrument || '-'}
+                </td>
+                <td className="p-2 text-sm font-black text-right">
+                  € {row.gage?.toFixed(2) || '0.00'}
+                </td>
+              </tr>
+            ))}
+            {/* Fill empty rows to maintain structure if needed */}
+            {rows.filter(r => !!r.musikerId).length === 0 && (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-gray-400 italic">Keine Musiker zugewiesen</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
       <button
         onClick={handleSave}
         disabled={isSaving}
-        className="w-full flex items-center justify-center gap-2 bg-brand-primary text-white py-2.5 rounded-lg font-bold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 bg-brand-primary text-white py-2.5 rounded-lg font-bold hover:bg-brand-primary/90 transition-colors disabled:opacity-50 print:hidden mt-4"
       >
         <Save className="w-5 h-5" />
         {isSaving ? 'Speichert...' : 'Musiker speichern'}

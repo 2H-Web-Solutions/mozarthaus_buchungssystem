@@ -59,3 +59,85 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
 }
+@media print {
+  @page {
+    margin: 0.5cm;
+    size: A4 portrait;
+  }
+
+  /* Reset all potential web shifts and force full width */
+  html, body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 11pt;
+    line-height: 1.25;
+    color: black !important;
+  }
+
+  #root {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Remove background decorations */
+  body::before, body::after, #root::before, #root::after {
+    display: none !important;
+  }
+
+  /* Force background colors to show in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print, .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Avoid breaking rows across pages */
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  /* Style headings for print */
+  h1, h2, h3, h4 {
+    color: black !important;
+    page-break-after: avoid !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+  }
+
+  .glass-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .print\:break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+}
