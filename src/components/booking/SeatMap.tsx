@@ -121,13 +121,6 @@ export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, c
   return (
     <div className="w-full bg-white border border-gray-200 rounded-xl p-6 shadow-inner relative">
       
-      {seatsMissing > 0 && (
-         <div className="mb-6 flex items-center gap-3 p-4 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg animate-pulse">
-           <AlertCircle className="w-5 h-5 flex-shrink-0" />
-           <p className="font-bold text-sm">Aktion erforderlich: Bitte weisen Sie noch {seatsMissing} Tickets im Sitzplan physisch zu.</p>
-         </div>
-      )}
-
       <div className="w-full overflow-x-auto pb-4">
         <div className="min-w-max mx-auto space-y-4">
           <div className="w-full bg-gray-300 text-gray-500 text-center py-2 text-sm font-bold tracking-widest uppercase rounded">

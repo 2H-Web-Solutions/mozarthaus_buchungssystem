@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { executeBookingTransaction } from '../../services/transactionService';
 import { Event, TicketCategory } from '../../types/schema';
 import { listenTicketCategories } from '../../services/firebase/pricingService';
-import { SeatMap } from './SeatMap';
 import { createPrivateReservation } from '../../services/privateReservationService';
+import { purchaseWithRegiondo } from '../../services/regiondoBookingPurchase';
 import { CalendarDays, Ticket, Building2, ChevronRight, CheckCircle2, Users, User, UsersRound } from 'lucide-react';
 
 export function BookingFlow() {
@@ -40,26 +40,7 @@ export function BookingFlow() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   
-  // Section 4
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const derivedEventId = selectedEventId;
-  const variant = selectedEventId.split('_')[0] || '';
 
-  // Fix 1: Reset seats when event/date changes to prevent ghost bookings
-  useEffect(() => {
-    setSelectedSeats([]);
-  }, [derivedEventId]);
-
-  // Fix 2: Truncate seats if ticket count is reduced below selected seats
-  useEffect(() => {
-    let total = 0;
-    Object.values(quantities).forEach(q => total += q);
-    
-    if (selectedSeats.length > total) {
-      setSelectedSeats(prev => prev.slice(0, total));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quantities]);
 
   useEffect(() => {
     const fetchPartnersData = async () => {
@@ -132,13 +113,11 @@ export function BookingFlow() {
     
     if (bookingType === 'einzel') {
       if (totalTickets === 0) return alert("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
-      if (selectedSeats.length !== totalTickets) return alert(`Bitte weise genau ${totalTickets} Sitzplätze im physischen Saalplan zu.`);
       if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
     } else if (bookingType === 'gruppe') {
       if (!selectedPartnerId) return alert("Bitte wähle einen Partner für die Gruppenbuchung aus.");
       if (!sellerReference || !contactPerson) return alert("Verkäuferreferenz und Kontaktperson sind erforderlich.");
       if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
-      if (selectedSeats.length !== totalTickets) return alert(`Bitte weise genau ${totalTickets} Sitzplätze im physischen Saalplan zu.`);
     } else if (bookingType === 'privat') {
       if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
       if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
@@ -164,11 +143,44 @@ export function BookingFlow() {
         });
         console.log("Private Reservation Created:", result);
       } else {
+        const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
+        
+        let regiondoResult = null;
+        if (bookingType === 'einzel' && selectedEvent?.regiondoId) {
+          // Handle Regiondo Purchase
+          const eventDateRaw = selectedEvent.date;
+          const dateYmd = eventDateRaw 
+            ? (typeof (eventDateRaw as any).toDate === 'function' 
+                ? (eventDateRaw as any).toDate().toISOString().split('T')[0] 
+                : (eventDateRaw as string).split('T')[0]) 
+            : '';
+
+          const regiondoCats = categories
+            .filter(c => (quantities[c.id] || 0) > 0)
+            .map(c => ({
+              name: c.name,
+              quantity: quantities[c.id],
+              regiondoOptionId: c.regiondoOptionId
+            }));
+
+          regiondoResult = await purchaseWithRegiondo({
+            productId: selectedEvent.regiondoId,
+            dateYmd,
+            time: selectedEvent.time || '19:00', // Default if missing
+            categories: regiondoCats,
+            customerData: {
+              name: customerName,
+              email: customerEmail,
+              phone: customerPhone
+            }
+          });
+          console.log("Regiondo Purchase Success:", regiondoResult);
+        }
+
         const tickets = bookingType === 'einzel' ? categories
           .filter(c => (quantities[c.id] || 0) > 0)
           .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
 
-        const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
         const eventDateRaw = selectedEvent?.date;
         const finalEventDateStr = eventDateRaw 
           ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
@@ -176,13 +188,13 @@ export function BookingFlow() {
 
         await executeBookingTransaction({
           eventId: selectedEventId,
-          variantId: variant,
+          variantId: selectedEventId.split('_')[0] || '',
           eventTitle: selectedEvent?.title || '',
           eventDate: finalEventDateStr,
           partnerId: selectedPartnerId || null,
           isB2B: !!selectedPartnerId,
-          source: selectedPartnerId ? 'b2b' : 'manual',
-          status: 'pending',
+          source: selectedPartnerId ? 'b2b' : (regiondoResult ? 'website' : 'manual'),
+          status: regiondoResult ? 'confirmed' : 'pending', // Regiondo purchases are pre-paid/confirmed
           bookingType,
           sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
           contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
@@ -190,8 +202,9 @@ export function BookingFlow() {
           customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
           tickets,
           customerData: { name: customerName, email: customerEmail, phone: customerPhone },
-          totalAmount: totalPrice,
-        }, selectedSeats);
+          totalAmount: regiondoResult?.grandTotal || totalPrice,
+          lastPayload: regiondoResult || undefined, // Store Regiondo result
+        }, []);
       }
       
       setSuccess(true);
@@ -389,35 +402,7 @@ export function BookingFlow() {
       </section>
       )}
 
-      {/* Sektion 4: Saalplan */}
-      {(bookingType === 'einzel' || bookingType === 'gruppe') && (
-        <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-purple-500 shadow-[0_0_10px_#a855f7]"></div>
-          <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-            <Ticket className="w-6 h-6 text-purple-500"/> 4. Saalplan-Zuweisung ({selectedSeats.length} / {totalTickets} zugewiesen)
-          </h2>
-          
-          {totalTickets === 0 ? (
-            <div className="p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xl font-medium">
-               👆 Bitte definieren Sie zuerst die Ticket-Anzahl {bookingType === 'einzel' ? 'in Sektion 3' : 'in den Pauschal-Details'}, um die Plätze physisch zuzuweisen.
-            </div>
-          ) : !selectedEventId ? (
-            <div className="p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xl font-medium">
-               👆 Bitte wählen Sie zuerst ein Konzert aus Sektion 1, um den tagesaktuellen Saalplan zu laden.
-            </div>
-          ) : (
-            <div className="overflow-hidden">
-               <SeatMap 
-                 eventId={derivedEventId}
-                 requiredSeats={totalTickets}
-                 selectedSeats={selectedSeats}
-                 onSeatSelect={setSelectedSeats}
-                 categoryAllocations={categoryAllocations}
-               />
-            </div>
-          )}
-        </section>
-      )}
+
 
       {bookingType !== 'einzel' && (
         <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
@@ -442,8 +427,15 @@ export function BookingFlow() {
         <div className="bg-gray-900 p-8 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl relative overflow-hidden">
            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
            <div className="z-10 text-center md:text-left">
-             <p className="text-gray-400 font-bold mb-1 uppercase tracking-widest text-sm">Zusammenfassung: <strong className="text-brand-primary bg-red-500/10 px-2 py-0.5 rounded ml-1">{totalTickets} Ticket(s)</strong></p>
-             <p className="text-4xl font-bold text-white tracking-tight">€ {totalPrice.toLocaleString('de-AT', {minimumFractionDigits: 2})}</p>
+             <p className="text-gray-400 font-bold mb-1 uppercase tracking-widest text-sm">
+               <span>Zusammenfassung:</span>{' '}
+               <strong className="text-brand-primary bg-red-500/10 px-2 py-0.5 rounded ml-1">
+                 <span>{totalTickets}</span> <span>Ticket(s)</span>
+               </strong>
+             </p>
+             <p className="text-4xl font-bold text-white tracking-tight">
+               <span>€</span> <span>{totalPrice.toLocaleString('de-AT', {minimumFractionDigits: 2})}</span>
+             </p>
            </div>
            <button 
              onClick={handleSubmit} 

@@ -56,8 +56,45 @@ export async function executeBookingTransaction(
       const seating = eventData.seating || {};
       const updatedSeating = { ...seating };
 
-      // Phase 1: Validate and block seats if applicable
-      if ((bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') && selectedSeatIds.length > 0) {
+      // Phase 1: Seat Assignment (Manual or Auto)
+      const finalSeatIds = [...selectedSeatIds];
+
+      if ((bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') && finalSeatIds.length === 0 && bookingData.tickets && bookingData.tickets.length > 0) {
+        // AUTO-ASSIGNMENT LOGIC
+        for (const ticket of bookingData.tickets) {
+          const qty = ticket.quantity || 1;
+          const catId = ticket.categoryId.toLowerCase();
+          
+          // Map categoryId to internal 'A', 'B', 'STUDENT'
+          let targetCat: 'A' | 'B' | 'STUDENT' = 'B';
+          if (catId.includes('cat_a') || catId.includes('kategorie a')) targetCat = 'A';
+          else if (catId.includes('student')) targetCat = 'STUDENT';
+
+          // Find available seats for this category
+          let availableSeats: string[] = [];
+          if (targetCat === 'STUDENT') {
+            // Students prefer Cat B (Rows D-F) but can sit in Cat A (Rows A-C) if needed
+            const catB = Object.keys(updatedSeating).filter(id => updatedSeating[id].category === 'B' && updatedSeating[id].bookingId === null);
+            const catA = Object.keys(updatedSeating).filter(id => updatedSeating[id].category === 'A' && updatedSeating[id].bookingId === null);
+            availableSeats = [...catB, ...catA];
+          } else {
+            availableSeats = Object.keys(updatedSeating).filter(id => 
+              updatedSeating[id].category === targetCat && updatedSeating[id].bookingId === null
+            );
+          }
+
+          // Assign seats
+          for (let i = 0; i < Math.min(qty, availableSeats.length); i++) {
+            const seatId = availableSeats[i];
+            updatedSeating[seatId].bookingId = bookingId;
+            if (targetCat === 'STUDENT') {
+              updatedSeating[seatId].category = 'STUDENT';
+            }
+            finalSeatIds.push(seatId);
+          }
+        }
+      } else if (selectedSeatIds.length > 0) {
+        // MANUAL ASSIGNMENT Logic (Legacy fallback/B2B overrides)
         for (const seatId of selectedSeatIds) {
           if (!updatedSeating[seatId]) {
             throw new Error(`Sitzplatz ${seatId} existiert im System nicht.`);
@@ -65,7 +102,6 @@ export async function executeBookingTransaction(
           if (updatedSeating[seatId].bookingId) {
             throw new Error(`Ticket-Konflikt: Platz Reihe ${updatedSeating[seatId].row} - Sitz ${updatedSeating[seatId].number} wurde bereits vergeben.`);
           }
-          // Reserve the seat
           updatedSeating[seatId].bookingId = bookingId;
         }
       }
@@ -77,7 +113,7 @@ export async function executeBookingTransaction(
         ...bookingData,
         id: bookingId,
         bookingNumber: bookingData.bookingNumber || generatedBookingNumber,
-        seatIds: (bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') ? selectedSeatIds : [],
+        seatIds: (bookingData.bookingType === 'einzel' || bookingData.bookingType === 'gruppe') ? finalSeatIds : [],
         createdAt: Timestamp.now()
       };
 
