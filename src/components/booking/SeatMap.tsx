@@ -5,7 +5,7 @@ import { APP_ID } from '../../lib/constants';
 import { Seat } from '../../types/schema';
 import { SEATING_PLAN_TEMPLATE } from '../../config/seatingPlan';
 import { initializeEventSeats } from '../../services/bookingService';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export interface CategoryAllocation {
   id: string;
@@ -97,7 +97,6 @@ export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, c
   }
 
   // Warning when constraints strictly block progression
-  const seatsMissing = requiredSeats - selectedSeats.length;
 
   const getSeatColorStyle = (seatId: string) => {
     const index = selectedSeats.indexOf(seatId);

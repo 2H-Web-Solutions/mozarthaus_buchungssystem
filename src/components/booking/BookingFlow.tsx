@@ -3,12 +3,11 @@ import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firest
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { useNavigate } from 'react-router-dom';
-import { executeBookingTransaction } from '../../services/transactionService';
 import { Event, TicketCategory } from '../../types/schema';
 import { listenTicketCategories } from '../../services/firebase/pricingService';
 import { createPrivateReservation } from '../../services/privateReservationService';
 import { purchaseWithRegiondo } from '../../services/regiondoBookingPurchase';
-import { CalendarDays, Ticket, Building2, ChevronRight, CheckCircle2, Users, User, UsersRound } from 'lucide-react';
+import { CalendarDays, Ticket, Building2, ChevronRight, CheckCircle2, User, UsersRound } from 'lucide-react';
 
 export function BookingFlow() {
   const navigate = useNavigate();
@@ -282,7 +281,11 @@ export function BookingFlow() {
               >
                 <option value="">-- Bitte wählen --</option>
                 {availableEvents.map(e => {
-                  const date = e.date?.toDate ? e.date.toDate().toLocaleDateString('de-AT') : new Date(e.date).toLocaleDateString('de-AT');
+                  const date = e.date 
+                    ? (typeof (e.date as any).toDate === 'function' 
+                        ? (e.date as any).toDate().toLocaleDateString('de-AT') 
+                        : new Date(e.date as string).toLocaleDateString('de-AT'))
+                    : 'Unbekannt';
                   return (
                     <option key={e.id} value={e.id}>
                       {date} {e.time ? `- ${e.time} Uhr` : ''} — {e.title || 'Mozart Ensemble'}
