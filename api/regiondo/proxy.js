@@ -45,6 +45,7 @@ function json(res, status, payload) {
 }
 
 module.exports = async function handler(req, res) {
+  console.log(`[Regiondo Proxy] Handling ${req.method} ${req.url}`);
   // Try both prefixed and non-prefixed env vars
   const publicKey = cleanEnv(process.env.VITE_REGIONDO_PUBLIC_KEY || process.env.REGIONDO_PUBLIC_KEY || '');
   const privateKey = cleanEnv(process.env.VITE_REGIONDO_PRIVATE_KEY || process.env.REGIONDO_PRIVATE_KEY || '');
