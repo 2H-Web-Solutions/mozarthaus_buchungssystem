@@ -159,7 +159,7 @@ export function EventBookingTable({ bookings, seating }: Props) {
                   </td>
                   <td className="p-4 text-center font-bold text-brand-red border-r border-gray-100 print:border-black">{item.quantity}</td>
                   <td className={`p-4 font-bold ${item.isCheckedIn ? 'text-gray-500' : 'text-gray-800'} border-r border-gray-100 print:border-black`}>
-                    {item.customerName}
+                    <span>{item.customerName}</span>
                   </td>
                   <td className="p-4 text-gray-600 border-r border-gray-100 print:hidden">
                     <span className="px-2 py-1 bg-gray-100 rounded text-xs font-bold uppercase tracking-wider border border-gray-200">
@@ -169,20 +169,25 @@ export function EventBookingTable({ bookings, seating }: Props) {
                   <td className="p-4 border-r border-gray-100 print:border-black">
                     {item.paymentStatus === 'paid' ? (
                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-green-700 bg-green-50 border border-green-100 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <CheckCircle2 className="w-3 h-3 print:hidden" /> Paid
+                         <CheckCircle2 className="w-3 h-3 print:hidden" /> <span>Paid</span>
                        </span>
                     ) : item.paymentStatus === 'confirmed' || item.paymentStatus === 'sent' ? (
                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-100 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <CheckCircle2 className="w-3 h-3 print:hidden" /> Confirmed
+                         <CheckCircle2 className="w-3 h-3 print:hidden" /> <span>Confirmed</span>
                        </span>
                     ) : (
                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase text-yellow-700 bg-yellow-50 border border-yellow-100 print:border-none print:p-0 print:text-black print:bg-transparent">
-                         <AlertCircle className="w-3 h-3 print:hidden" /> Pending
+                         <AlertCircle className="w-3 h-3 print:hidden" /> <span>Pending</span>
                        </span>
                     )}
                   </td>
                   <td className="p-4 text-right font-bold text-gray-900 border-r border-gray-100 print:hidden">
-                    € {item.amount.toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="flex justify-end items-baseline gap-1">
+                      <span className="text-xs opacity-50 select-none">€</span>
+                      <span className="tabular-nums">
+                        {item.amount.toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </td>
                   <td className="p-4 text-gray-600 border-r border-gray-100 print:hidden">
                     <span className="font-bold uppercase tracking-wider text-xs text-gray-400">{item.paymentMethod}</span>

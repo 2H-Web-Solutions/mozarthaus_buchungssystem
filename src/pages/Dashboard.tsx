@@ -59,7 +59,12 @@ export function Dashboard() {
           <div className="flex justify-between items-start">
              <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Umsatz Monat</p>
-              <h2 className="text-3xl font-black text-slate-900 mt-2">€ {revenue.toLocaleString('de-AT', {minimumFractionDigits: 0})}</h2>
+              <h2 className="text-3xl font-black text-slate-900 mt-2 flex items-baseline gap-1">
+                <span className="text-xl opacity-40 select-none">€</span>
+                <span className="tabular-nums">
+                  {revenue.toLocaleString('de-AT', {minimumFractionDigits: 0})}
+                </span>
+              </h2>
             </div>
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Euro className="w-6 h-6"/></div>
           </div>

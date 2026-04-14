@@ -43,11 +43,26 @@ export function getBookingDisplayData(booking: Booking): BookingDisplayData {
   // 2. Resolve Customer Email
   let customerEmail = booking.customerData?.email || lp.contact_data?.email || lp.email || '-';
 
-  // 3. Resolve Total Amount
-  let totalAmount = booking.totalAmount || 0;
-  if (lp.total_amount) {
-    totalAmount = typeof lp.total_amount === 'string' ? parseFloat(lp.total_amount) : lp.total_amount;
+  // 3. Resolve Total Amount with better fallbacks
+  let totalAmount = booking.totalAmount ?? 0;
+  
+  // Check payload for variations of total price
+  if (lp && Object.keys(lp).length > 0) {
+    const rawAmount = lp.total_amount ?? lp.total_price ?? lp.amount ?? lp.payment_amount;
+    if (rawAmount !== undefined && rawAmount !== null) {
+      if (typeof rawAmount === 'string') {
+        // Handle both comma and dot as decimal separators
+        const cleanedAmount = rawAmount.replace(',', '.');
+        const parsed = parseFloat(cleanedAmount);
+        if (!isNaN(parsed)) totalAmount = parsed;
+      } else if (typeof rawAmount === 'number') {
+        totalAmount = rawAmount;
+      }
+    }
   }
+
+  // Ensure totalAmount is a valid number
+  if (isNaN(totalAmount)) totalAmount = 0;
 
   // 4. Payment Method
   let paymentMethod = booking.paymentMethod || lp.payment_method?.label || lp.payment_method || (lp.pos_id ? 'POS / Vor Ort' : '-');

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
@@ -23,11 +23,16 @@ export function BookingFlow() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   
-  const [bookingType, setBookingType] = useState<'einzel' | 'gruppe' | 'privat'>('einzel');
+  const [bookingType, setBookingType] = useState<'einzel' | 'privat' | 'double'>('einzel');
   const [sellerReference, setSellerReference] = useState('');
   const [contactPerson, setContactPerson] = useState('');
-  const [groupPersons, setGroupPersons] = useState<number | ''>('');
+  const [groupPersons, setGroupPersons] = useState<number | ''>(''); 
   const [customTotalPrice, setCustomTotalPrice] = useState<number | ''>('');
+  
+  // Double Booking (now Group Booking Tab) fields
+  const [doubleCategoryId, setDoubleCategoryId] = useState('');
+  const [doubleTickets, setDoubleTickets] = useState<number | ''>('');
+  const [doublePrice, setDoublePrice] = useState<number | ''>('');
   
   const [privateEventDate, setPrivateEventDate] = useState('');
   const [privateEventTime, setPrivateEventTime] = useState('');
@@ -39,8 +44,6 @@ export function BookingFlow() {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  
-
 
   useEffect(() => {
     const fetchPartnersData = async () => {
@@ -53,31 +56,20 @@ export function BookingFlow() {
         }));
         setPartners(partnerData);
       } catch (error) {
-        console.error('Fehler beim Laden der Partner:', error);
+        console.error("Error fetching partners:", error);
       }
     };
     fetchPartnersData();
     
-    // Live stream master pricing configs
     const unsubPricing = listenTicketCategories(cats => {
-      setCategories(cats.filter(c => c.isActive).sort((a,b) => b.price - a.price)); // Highest price first
+      setCategories([...cats].sort((a, b) => b.price - a.price));
     });
 
-    // Fetch live Events
     const unsubEvents = onSnapshot(query(collection(db, `apps/${APP_ID}/events`), orderBy('date', 'asc')), snap => {
       const evts: any[] = [];
-      const now = Date.now();
       snap.forEach(d => {
          const data = d.data();
-         const ev = { id: d.id, ...data };
-         let eventTime = 0;
-         if (data.date && typeof data.date.toDate === 'function') {
-           eventTime = data.date.toMillis();
-         } else if (data.date) {
-           eventTime = new Date(`${data.date}T${data.time || '00:00'}`).getTime();
-         }
-         // Optional: filter past events
-         if (!eventTime || eventTime >= now) evts.push(ev);
+         evts.push({ id: d.id, ...data });
       });
       setAvailableEvents(evts);
     });
@@ -88,50 +80,65 @@ export function BookingFlow() {
     };
   }, []);
 
-  let totalPrice = 0;
-  let totalTickets = 0;
-  
-  if (bookingType === 'einzel') {
-    categories.forEach(c => {
-      const q = quantities[c.id] || 0;
-      totalPrice += q * c.price;
-      totalTickets += q;
-    });
-  } else {
-    totalPrice = Number(customTotalPrice) || 0;
-    totalTickets = Number(groupPersons) || 0;
-  }
-
-  const categoryAllocations = categories.map(c => ({
-    id: c.id,
-    name: c.name,
-    quantity: quantities[c.id] || 0,
-    colorCode: c.colorCode
-  }));
-
-  const handleSubmit = async () => {
+  // Derived state for the checkout bar with explicit dependency tracking
+  const { totalPrice, totalTickets } = useMemo(() => {
+    let price = 0;
+    let tickets = 0;
     
     if (bookingType === 'einzel') {
-      if (totalTickets === 0) return alert("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
-      if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
-    } else if (bookingType === 'gruppe') {
-      if (!selectedPartnerId) return alert("Bitte wähle einen Partner für die Gruppenbuchung aus.");
-      if (!sellerReference || !contactPerson) return alert("Verkäuferreferenz und Kontaktperson sind erforderlich.");
-      if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
+      categories.forEach(c => {
+        const q = quantities[c.id] || 0;
+        price += q * (Number(c.price) || 0);
+        tickets += q;
+      });
+    } else if (bookingType === 'double') {
+      price = Number(doublePrice) || 0;
+      tickets = Number(doubleTickets) || 0;
     } else if (bookingType === 'privat') {
-      if (!customerName || !customerEmail || !customerPhone) return alert("Kundenname, Email und Telefonnummer sind zwingend erforderlich.");
+      price = Number(customTotalPrice) || 0;
+      tickets = Number(groupPersons) || 0;
+    }
+    
+    return { totalPrice: price, totalTickets: tickets };
+  }, [bookingType, quantities, doublePrice, doubleTickets, customTotalPrice, groupPersons, categories]);
+
+  // Debugging log to track price updates
+  useEffect(() => {
+    console.log(`[BookingFlow] Calculation updated: Type=${bookingType}, TotalPrice=${totalPrice}, TotalTickets=${totalTickets}`);
+  }, [totalPrice, totalTickets, bookingType]);
+
+  const handleSubmit = async () => {
+    if (bookingType === 'einzel') {
+      if (totalTickets === 0) return alert("Bitte wähle mindestens ein Ticket aus.");
+      if (!customerName || !customerEmail || !customerPhone) return alert("Kontaktdaten sind erforderlich.");
+    } else if (bookingType === 'privat') {
+      if (!customerName || !customerEmail || !customerPhone) return alert("Kontaktdaten sind erforderlich.");
       if (!groupPersons || !customTotalPrice) return alert("Personenanzahl und Gesamtpreis sind erforderlich.");
-      if (!privateEventDate || !privateEventTime) return alert("Bitte Datum und Uhrzeit für das Privat-Event angeben.");
+      if (!privateEventDate || !privateEventTime) return alert("Datum und Uhrzeit sind erforderlich.");
+    } else if (bookingType === 'double') {
+      if (!selectedEventId) return alert("Bitte wähle ein Konzert aus.");
+      if (!doubleCategoryId) return alert("Bitte wähle eine Kategorie aus.");
+      if (!doubleTickets || !doublePrice) return alert("Ticketanzahl und Gesamtpreis sind erforderlich.");
+      if (!customerEmail || !customerPhone) return alert("Email und Telefonnummer sind erforderlich.");
+      if (!sellerReference || !contactPerson) return alert("Referenz und Kontaktperson sind erforderlich.");
     }
 
-    if (bookingType !== 'privat') {
-      if (!selectedEventId) return alert("Bitte wähle ein Konzert aus.");
+    if (bookingType !== 'privat' && !selectedEventId) {
+      return alert("Bitte wähle ein Konzert aus.");
     }
 
     setIsSubmitting(true);
     try {
+      const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
+      const eventDateRaw = selectedEvent?.date;
+      const dateYmd = eventDateRaw 
+        ? (typeof (eventDateRaw as any).toDate === 'function' 
+            ? (eventDateRaw as any).toDate().toISOString().split('T')[0] 
+            : (eventDateRaw as string).split('T')[0]) 
+        : '';
+
       if (bookingType === 'privat') {
-        const result = await createPrivateReservation({
+        await createPrivateReservation({
           title: privateEventTitle || `Privat Event - ${customerName}`,
           date: privateEventDate,
           time: privateEventTime,
@@ -139,84 +146,68 @@ export function BookingFlow() {
           customerEmail,
           customerPhone,
           guestCount: Number(groupPersons),
-          totalPrice: Number(customTotalPrice)
+          totalPrice: Number(customTotalPrice),
+          partnerId: selectedPartnerId || null
         });
-        console.log("Private Reservation Created:", result);
+      } else if (bookingType === 'double') {
+        const cat = categories.find(c => c.id === doubleCategoryId);
+        if (!cat) throw new Error("Kategorie nicht gefunden.");
+
+        await purchaseWithRegiondo({
+          productId: '23941',
+          dateYmd,
+          time: selectedEvent?.time || '15:00',
+          categories: [{
+            name: cat.name,
+            quantity: Number(doubleTickets),
+            regiondoOptionId: cat.regiondoOptionId
+          }],
+          customerData: {
+            name: customerName || contactPerson || 'Group Booking',
+            email: customerEmail,
+            phone: customerPhone
+          }
+        });
+
+        await createPrivateReservation({
+          title: `Group Booking: ${selectedEvent?.title || 'Mozart Ensemble'}`,
+          date: dateYmd,
+          time: selectedEvent?.time || '15:00',
+          customerName: customerName || contactPerson || 'Group Booking',
+          customerEmail,
+          customerPhone,
+          guestCount: Number(doubleTickets),
+          totalPrice: Number(doublePrice),
+          partnerId: selectedPartnerId || null
+        });
       } else {
-        const selectedEvent = availableEvents.find(e => e.id === selectedEventId);
-        
-        let regiondoResult = null;
-        if (bookingType === 'einzel') {
-          // Force Product ID 23941 for Mozart Ensemble
-          const productId = '23941';
-          
-          const eventDateRaw = selectedEvent?.date;
-          const dateYmd = eventDateRaw 
-            ? (typeof (eventDateRaw as any).toDate === 'function' 
-                ? (eventDateRaw as any).toDate().toISOString().split('T')[0] 
-                : (eventDateRaw as string).split('T')[0]) 
-            : '';
+        // Einzelbuchung
+        const regiondoCats = categories
+          .filter(c => (quantities[c.id] || 0) > 0)
+          .map(c => ({
+            name: c.name,
+            quantity: quantities[c.id],
+            regiondoOptionId: c.regiondoOptionId
+          }));
 
-          const regiondoCats = categories
-            .filter(c => (quantities[c.id] || 0) > 0)
-            .map(c => ({
-              name: c.name,
-              quantity: quantities[c.id],
-              regiondoOptionId: c.regiondoOptionId // Using the specific numeric mapping from ticket_categories
-            }));
-
-          regiondoResult = await purchaseWithRegiondo({
-            productId,
-            dateYmd,
-            time: selectedEvent?.time || '15:00',
-            categories: regiondoCats,
-            customerData: {
-              name: customerName,
-              email: customerEmail,
-              phone: customerPhone
-            }
-          });
-          console.log("Regiondo Purchase Success:", regiondoResult);
-        }
-
-        // Only register in Firestore if it's NOT a Regiondo website booking.
-        // Standard bookings are synced automatically via webhook.
-        if (!regiondoResult) {
-          const tickets = bookingType === 'einzel' ? categories
-            .filter(c => (quantities[c.id] || 0) > 0)
-            .map(c => ({ categoryId: c.id, quantity: quantities[c.id] })) : [];
-
-          const eventDateRaw = selectedEvent?.date;
-          const finalEventDateStr = eventDateRaw 
-            ? (typeof (eventDateRaw as any).toDate === 'function' ? (eventDateRaw as any).toDate().toISOString() : eventDateRaw as string) 
-            : '';
-
-          await executeBookingTransaction({
-            eventId: selectedEventId,
-            variantId: selectedEventId.split('_')[0] || '',
-            eventTitle: selectedEvent?.title || '',
-            eventDate: finalEventDateStr,
-            partnerId: selectedPartnerId || null,
-            isB2B: !!selectedPartnerId,
-            source: selectedPartnerId ? 'b2b' : 'manual',
-            status: 'pending',
-            bookingType,
-            sellerReference: bookingType === 'gruppe' ? sellerReference : undefined,
-            contactPerson: bookingType === 'gruppe' ? contactPerson : undefined,
-            groupPersons: bookingType !== 'einzel' ? Number(groupPersons) : undefined,
-            customTotalPrice: bookingType !== 'einzel' ? Number(customTotalPrice) : undefined,
-            tickets,
-            customerData: { name: customerName, email: customerEmail, phone: customerPhone },
-            totalAmount: totalPrice,
-          }, []);
-        }
+        await purchaseWithRegiondo({
+          productId: '23941',
+          dateYmd,
+          time: selectedEvent?.time || '15:00',
+          categories: regiondoCats,
+          customerData: {
+            name: customerName,
+            email: customerEmail,
+            phone: customerPhone
+          }
+        });
       }
       
       setSuccess(true);
       setTimeout(() => navigate(bookingType === 'privat' ? '/kanban' : '/bookings'), 3000);
     } catch (err: any) {
       console.error(err);
-      alert("Schwerer Fehler bei der Transaktion: " + (err?.message || JSON.stringify(err)));
+      alert("Fehler: " + (err?.message || "Unbekannter Fehler"));
     } finally {
       setIsSubmitting(false);
     }
@@ -227,15 +218,13 @@ export function BookingFlow() {
       <div className="max-w-3xl mx-auto mt-20 p-12 bg-white rounded-2xl shadow-xl text-center border border-gray-100 flex flex-col items-center">
          <CheckCircle2 className="w-24 h-24 text-green-500 mb-6 animate-in zoom-in" />
          <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">
-           {bookingType === 'privat' ? 'Privatbuchung erfolgreich erstellt!' : 'Transaktion erfolgreich!'}
+           {bookingType === 'privat' ? 'Privatbuchung erfolgreich erstellt!' : 'Buchung erfolgreich!'}
          </h2>
          <p className="text-gray-500 text-lg">
-           {bookingType === 'privat' 
-            ? 'Das Event und die entsprechende Buchung wurden im System angelegt.' 
-            : 'Die Reservierung wurde als "Pending" im Zentralsystem erfasst.'}
+           Die Reservierung wurde erfolgreich im System erfasst.
          </p>
          <p className="text-sm text-gray-400 mt-6 animate-pulse">
-           Sie werden zur {bookingType === 'privat' ? 'Live Status Übersicht' : 'Buchungsübersicht'} weitergeleitet...
+           Sie werden weitergeleitet...
          </p>
       </div>
     );
@@ -244,25 +233,25 @@ export function BookingFlow() {
   return (
     <div className="max-w-4xl mx-auto pb-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="border-b border-gray-200 pb-5">
-        <h1 className="text-3xl font-heading text-brand-primary font-bold">Varianten-Buchung (System)</h1>
-        <p className="text-gray-500 mt-2 text-lg font-medium">Partner Flow & Pauschalbuchung</p>
+        <h1 className="text-3xl font-heading text-brand-primary font-bold">Konzert-Buchung</h1>
+        <p className="text-gray-500 mt-2 text-lg font-medium">Partner Flow & Buchungssystem</p>
       </div>
 
       <div className="flex gap-4 mb-8">
         <button onClick={() => setBookingType('einzel')} className={`flex-1 py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${bookingType === 'einzel' ? 'bg-brand-primary text-white shadow-lg' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
           <User className="w-5 h-5"/> Einzelbuchung
         </button>
-        <button onClick={() => setBookingType('gruppe')} className={`flex-1 py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${bookingType === 'gruppe' ? 'bg-blue-500 text-white shadow-lg' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-          <Users className="w-5 h-5"/> Gruppenbuchung
+        <button onClick={() => setBookingType('double')} className={`flex-1 py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${bookingType === 'double' ? 'bg-orange-500 text-white shadow-lg' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+          <Ticket className="w-5 h-5"/> Group Booking
         </button>
         <button onClick={() => setBookingType('privat')} className={`flex-1 py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${bookingType === 'privat' ? 'bg-purple-500 text-white shadow-lg' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
           <UsersRound className="w-5 h-5"/> Privatbuchung
         </button>
       </div>
 
-      {/* Sektion 1: Event & Termin */}
+      {/* Section 1: Event Selection */}
       <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-primary shadow-[0_0_10px_#c02a2a]"></div>
+        <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-primary"></div>
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <CalendarDays className="w-6 h-6 text-brand-primary"/> 1. Event & Termin Option
         </h2>
@@ -271,16 +260,16 @@ export function BookingFlow() {
           {bookingType === 'privat' ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1">
-                <label className="block text-sm font-bold text-gray-700 mb-2">Event-Titel (z.B. Firmenevent ABC)</label>
-                <input type="text" placeholder="Privatkonzert" value={privateEventTitle} onChange={e => setPrivateEventTitle(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none shadow-sm" />
+                <label className="block text-sm font-bold text-gray-700 mb-2">Event-Titel</label>
+                <input type="text" value={privateEventTitle} onChange={e => setPrivateEventTitle(e.target.value)} placeholder="z.B. Privatkonzert Mozart" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Datum des Privat-Events</label>
-                <input type="date" value={privateEventDate} onChange={e => setPrivateEventDate(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none shadow-sm" />
+                <label className="block text-sm font-bold text-gray-700 mb-2">Datum</label>
+                <input type="date" value={privateEventDate} onChange={e => setPrivateEventDate(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Uhrzeit</label>
-                <input type="time" value={privateEventTime} onChange={e => setPrivateEventTime(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none shadow-sm" />
+                <input type="time" value={privateEventTime} onChange={e => setPrivateEventTime(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
               </div>
             </div>
           ) : (
@@ -289,20 +278,14 @@ export function BookingFlow() {
               <select 
                 value={selectedEventId} 
                 onChange={e => setSelectedEventId(e.target.value)} 
-                className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none bg-gray-50 text-gray-900 font-bold cursor-pointer transition-shadow shadow-inner"
+                className="w-full p-4 border border-gray-300 rounded-xl outline-none bg-gray-50 text-gray-900 font-bold"
               >
                 <option value="">-- Bitte wählen --</option>
                 {availableEvents.map(e => {
-                  let displayDate = '';
-                  if (e.date && typeof (e.date as any).toDate === 'function') {
-                    displayDate = (e.date as any).toDate().toLocaleDateString('de-AT');
-                  } else if (e.date) {
-                    displayDate = new Date(e.date as string).toLocaleDateString('de-AT');
-                  }
-                  
+                  const date = e.date?.toDate ? e.date.toDate().toLocaleDateString('de-AT') : new Date(e.date).toLocaleDateString('de-AT');
                   return (
                     <option key={e.id} value={e.id}>
-                      {displayDate} {(e as any).time ? `- ${(e as any).time} Uhr` : ''} — {e.title || 'Mozart Ensemble'}
+                      {date} {e.time ? `- ${e.time} Uhr` : ''} — {e.title || 'Mozart Ensemble'}
                     </option>
                   );
                 })}
@@ -312,145 +295,161 @@ export function BookingFlow() {
         </div>
       </section>
 
-      {/* Sektion 2: Kundendaten & B2B */}
+      {/* Section 2: Customer & B2B */}
       <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500 shadow-[0_0_10px_#3b82f6]"></div>
+        <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-blue-500"/> 2. Käuferdetails & Partner-Zuweisung
+          <Building2 className="w-6 h-6 text-blue-500"/> 2. Käuferdetails & Partner
         </h2>
         
         <div className="space-y-6">
-           {/* Partner Auswahl (B2B) - Immer für Gruppe, Optional für Einzel */}
-           {(bookingType === 'einzel' || bookingType === 'gruppe') && (
-             <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-               <label className="block text-sm font-medium text-gray-700 mb-2">
-                 {bookingType === 'gruppe' ? 'Hotel / Partner (Erforderlich)' : 'B2B Partner (Optional)'}
-               </label>
-               <select
-                 value={selectedPartnerId}
-                 onChange={(e) => setSelectedPartnerId(e.target.value)}
-                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#c02a2a] focus:border-transparent"
-               >
-                 <option value="">{bookingType === 'gruppe' ? '-- Bitte Partner wählen --' : '-- Kein Partner (Direktbuchung) --'}</option>
-                 {partners.map(partner => (
-                   <option key={partner.id} value={partner.id}>
-                     {partner.name} {partner.type ? `(${partner.type})` : ''}
-                   </option>
-                 ))}
-               </select>
-             </div>
-           )}
+           <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+             <label className="block text-sm font-medium text-gray-700 mb-2">B2B Partner (Optional)</label>
+             <select
+               value={selectedPartnerId}
+               onChange={e => setSelectedPartnerId(e.target.value)}
+               className="w-full p-2 border border-gray-300 rounded-md outline-none"
+             >
+               <option value="">-- Kein Partner --</option>
+               {partners.map(partner => (
+                 <option key={partner.id} value={partner.id}>{partner.name}</option>
+               ))}
+             </select>
+           </div>
 
-           {bookingType === 'gruppe' && (
+           {bookingType === 'double' && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-2">Verkäuferreferenz (Buchungsnummer)</label>
-                 <input type="text" placeholder="z.B. REF-12345" value={sellerReference} onChange={e => setSellerReference(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" />
+                 <label className="block text-sm font-bold text-gray-700 mb-2">Verkäuferreferenz</label>
+                 <input type="text" value={sellerReference} onChange={e => setSellerReference(e.target.value)} placeholder="z.B. REF-12345" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
                </div>
                <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-2">Kontaktperson (Name)</label>
-                 <input type="text" placeholder="Name der meldenden Person" value={contactPerson} onChange={e => setContactPerson(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" />
+                 <label className="block text-sm font-bold text-gray-700 mb-2">Kontaktperson</label>
+                 <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Name der meldenden Person" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
                </div>
              </div>
            )}
 
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <div>
-               <label className="block text-sm font-bold text-gray-700 mb-2">{bookingType === 'gruppe' ? 'E-Mail für Bestätigung' : 'Vor- und Nachname'}</label>
-               {bookingType === 'gruppe' ? (
-                 <input type="email" placeholder="hotel@example.com" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" />
-               ) : (
-                 <input type="text" placeholder="Max Mustermann" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none shadow-sm" />
-               )}
+               <label className="block text-sm font-bold text-gray-700 mb-2">Vor- und Nachname</label>
+               <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Max Mustermann" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
              </div>
-             {bookingType !== 'gruppe' && (
-               <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-2">Gültige E-Mail Adresse</label>
-                 <input type="email" placeholder="max@example.com" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary outline-none shadow-sm" />
-               </div>
-             )}
              <div>
-               <label className="block text-sm font-bold text-gray-700 mb-2">Telefonnummer</label>
-               <input type="tel" placeholder="+43 123 45678" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className={`w-full p-4 border border-gray-300 rounded-xl focus:ring-2 outline-none shadow-sm ${bookingType === 'gruppe' ? 'focus:ring-blue-500' : 'focus:ring-brand-primary'}`} />
+               <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
+               <input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="max@example.com" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
+             </div>
+             <div>
+               <label className="block text-sm font-bold text-gray-700 mb-2">Telefon</label>
+               <input type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="+43 1 123456" className="w-full p-4 border border-gray-300 rounded-xl outline-none" />
              </div>
            </div>
         </div>
       </section>
 
-      {/* Sektion 3: Tickets */}
+      {/* Section 3: Details */}
       {bookingType === 'einzel' && (
-      <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
-        <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-          <Ticket className="w-6 h-6 text-emerald-500"/> 3. Kontingente & Tickets
-        </h2>         <div className="grid grid-cols-1 items-stretch md:grid-cols-3 gap-6 mb-10">
-           {categories.map((cat) => (
-             <div key={cat.id} className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center justify-between shadow-sm">
-               <div className="text-center mb-6">
-                  <span className="block text-xl font-bold text-gray-900 mb-1 flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: cat.colorCode }}></div>
-                    {cat.name}
-                  </span>
-                  <span className="block text-sm text-gray-500 font-medium">{cat.price.toFixed(2)} € pro Ticket</span>
-               </div>
-               <div className="flex items-center gap-5">
-                 <button onClick={() => setQuantities(prev => ({ ...prev, [cat.id]: Math.max(0, (prev[cat.id] || 0) - 1)}))} className="w-12 h-12 rounded-full bg-white border border-gray-300 flex items-center justify-center font-bold text-2xl hover:bg-gray-100 shadow-sm active:scale-95 transition-transform">-</button>
-                 <span className="text-3xl font-heading font-bold w-10 text-center text-brand-primary">{quantities[cat.id] || 0}</span>
-                 <button onClick={() => setQuantities(prev => ({ ...prev, [cat.id]: (prev[cat.id] || 0) + 1}))} className="w-12 h-12 rounded-full bg-white border border-gray-300 flex items-center justify-center font-bold text-2xl hover:bg-gray-100 shadow-sm active:scale-95 transition-transform">+</button>
-               </div>
-             </div>
-           ))}
-           {categories.length === 0 && (
-             <div className="col-span-1 md:col-span-3 p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xl font-medium">Es sind noch keine Ticket-Kategorien angelegt (Stammdaten).</div>
-           )}
-         </div> 
-      </section>
-      )}
-
-
-
-      {bookingType !== 'einzel' && (
         <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
-          <div className={`absolute top-0 left-0 w-1.5 h-full ${bookingType === 'gruppe' ? 'bg-blue-500 shadow-[0_0_10px_#3b82f6]' : 'bg-purple-500 shadow-[0_0_10px_#a855f7]'}`}></div>
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <UsersRound className={`w-6 h-6 ${bookingType === 'gruppe' ? 'text-blue-500' : 'text-purple-500'}`}/> 3. Pauschal-Details
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+          <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
+            <Ticket className="w-6 h-6 text-emerald-500"/> 3. Tickets
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div>
-               <label className="block text-sm font-bold text-gray-700 mb-2">Personenanzahl</label>
-               <input type="number" min="1" placeholder="z.B. 25" value={groupPersons} onChange={e => setGroupPersons(e.target.value ? Number(e.target.value) : '')} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm text-xl font-bold" />
-             </div>
-             <div>
-               <label className="block text-sm font-bold text-gray-700 mb-2">Gesamtpreis (€)</label>
-               <input type="number" min="0" step="0.01" placeholder="z.B. 1500.00" value={customTotalPrice} onChange={e => setCustomTotalPrice(e.target.value ? Number(e.target.value) : '')} className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm text-xl font-bold" />
-             </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {categories.map(cat => (
+              <div key={cat.id} className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: cat.colorCode }}></div>
+                <div className="w-4 h-4 rounded-full mb-2 shadow-sm" style={{ backgroundColor: cat.colorCode }}></div>
+                <span className="block text-xl font-bold mb-1">{cat.name}</span>
+                <span className="block text-sm text-gray-500 mb-4">{cat.price.toFixed(2)} €</span>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setQuantities(p => ({...p, [cat.id]: Math.max(0, (p[cat.id]||0)-1)}))} className="w-10 h-10 border rounded-full">-</button>
+                  <span className="text-2xl font-bold">{quantities[cat.id] || 0}</span>
+                  <button onClick={() => setQuantities(p => ({...p, [cat.id]: (p[cat.id]||0)+1}))} className="w-10 h-10 border rounded-full">+</button>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}
 
-        {/* Checkout Bar */}
-        <div className="bg-gray-900 p-8 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
-           <div className="z-10 text-center md:text-left">
-             <p className="text-gray-400 font-bold mb-1 uppercase tracking-widest text-sm">
-               <span>Zusammenfassung:</span>{' '}
-               <strong className="text-brand-primary bg-red-500/10 px-2 py-0.5 rounded ml-1">
-                 <span>{totalTickets}</span> <span>Ticket(s)</span>
-               </strong>
-             </p>
-             <p className="text-4xl font-bold text-white tracking-tight">
-               <span>€</span> <span>{totalPrice.toLocaleString('de-AT', {minimumFractionDigits: 2})}</span>
-             </p>
+      {bookingType === 'double' && (
+        <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500"></div>
+          <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
+            <Ticket className="w-6 h-6 text-orange-500"/> 3. Group Booking Details
+          </h2>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              {categories.filter(c => c.name.toLowerCase().includes('kategorie')).map(cat => (
+                <label key={cat.id} className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === cat.id ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
+                  <input type="radio" value={cat.id} className="hidden" onChange={() => setDoubleCategoryId(cat.id)} />
+                  <div className="w-4 h-4 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: cat.colorCode }}></div>
+                  <span className="text-xl font-bold">{cat.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Anzahl Tickets</label>
+                <input type="number" placeholder="Tickets" value={doubleTickets} onChange={e => setDoubleTickets(e.target.value ? Number(e.target.value) : '')} className="p-4 border border-gray-300 rounded-xl text-center text-xl font-bold w-full outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Gesamtpreis (€)</label>
+                <input type="number" placeholder="Preis (€)" value={doublePrice} onChange={e => setDoublePrice(e.target.value ? Number(e.target.value) : '')} className="p-4 border border-gray-300 rounded-xl text-center text-xl font-bold w-full outline-none" />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {bookingType === 'privat' && (
+        <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-purple-500"></div>
+          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <UsersRound className="text-purple-500 w-6 h-6"/> 3. Pauschal-Details
+          </h2>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Personenanzahl</label>
+              <input type="number" placeholder="Personen" value={groupPersons} onChange={e => setGroupPersons(e.target.value ? Number(e.target.value) : '')} className="p-4 border border-gray-300 rounded-xl text-xl font-bold w-full outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Pauschalpreis (€)</label>
+              <input type="number" placeholder="Gesamtpreis" value={customTotalPrice} onChange={e => setCustomTotalPrice(e.target.value ? Number(e.target.value) : '')} className="p-4 border border-gray-300 rounded-xl text-xl font-bold w-full outline-none" />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Checkout Bar */}
+      <div className="bg-gray-900 p-8 rounded-2xl flex justify-between items-center shadow-2xl relative overflow-hidden">
+         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary rounded-full blur-[100px] opacity-10 pointer-events-none"></div>
+         <div className="z-10">
+           <p className="text-gray-400 font-bold mb-1 uppercase text-sm tracking-wider">
+             <span>
+               {bookingType === 'einzel' 
+                 ? `Einzelbuchung: ${totalTickets} Tickets` 
+                 : bookingType === 'double' 
+                   ? `Gruppen-Pauschale: ${totalTickets} Tickets` 
+                   : `Privatevent: ${totalTickets} Personen`}
+             </span>
+           </p>
+           <div className="text-4xl font-bold text-white flex items-baseline gap-2">
+             <span className="text-2xl opacity-80 decoration-none select-none">€</span>
+             <span className="tabular-nums">
+               {totalPrice.toLocaleString('de-AT', {minimumFractionDigits: 2})}
+             </span>
            </div>
-           <button 
-             onClick={handleSubmit} 
-             disabled={isSubmitting || totalTickets === 0}
-             className="w-full md:w-auto px-10 py-5 bg-brand-primary text-white text-xl font-bold rounded-xl hover:bg-red-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-brand-primary/30 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 z-10"
-           >
-             {isSubmitting ? 'Transaktion läuft...' : 'Zahlungspflichtig Buchen'}
-             {!isSubmitting && <ChevronRight className="w-7 h-7"/>}
-           </button>
-        </div>
+         </div>
+         <button 
+           onClick={handleSubmit} 
+           disabled={isSubmitting || totalTickets === 0 || totalPrice === 0} 
+           className="px-10 py-5 bg-brand-primary text-white text-xl font-bold rounded-xl hover:bg-red-700 disabled:opacity-50 transition-all flex items-center gap-2 z-10"
+         >
+           {isSubmitting ? 'Verarbeitung...' : 'Zahlungspflichtig Buchen'}
+           {!isSubmitting && <ChevronRight className="w-6 h-6" />}
+         </button>
+      </div>
     </div>
   );
 }

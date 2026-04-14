@@ -167,7 +167,7 @@ export function EventBelegungsplan() {
           </h1>
           <div className="flex items-center gap-3 mt-2">
             <p className="text-slate-500 font-bold text-lg">
-              {event.title} <span className="text-slate-300 mx-3">|</span> {eventDateStr} {event.time || ''} Uhr
+              <span>{event.title}</span> <span className="text-slate-300 mx-3">|</span> <span>{eventDateStr}</span> <span>{event.time || ''} Uhr</span>
             </p>
             {event.is_private && (
               <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border border-amber-200">

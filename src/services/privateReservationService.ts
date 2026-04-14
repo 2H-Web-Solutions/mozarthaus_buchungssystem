@@ -18,6 +18,7 @@ interface PrivateReservationInput {
   customerPhone?: string;
   guestCount: number;
   totalPrice?: number;
+  partnerId?: string | null;
 }
 
 /**
@@ -81,8 +82,8 @@ export async function createPrivateReservation(input: PrivateReservationInput) {
         id: bookingId,
         bookingNumber: `PRIV-${input.date.replace(/-/g, '')}`,
         eventId: eventId,
-        partnerId: null,
-        isB2B: false,
+        partnerId: input.partnerId || null,
+        isB2B: !!input.partnerId,
         source: 'manual',
         status: 'pending', // Mapped to 'Neu' in Kanban
         bookingType: 'privat',
