@@ -62,23 +62,38 @@ export async function updateBookingStatus(
 
       // Ensure locked seats are released exactly once during cancellation mutations
       if (newStatus === 'cancelled' && bookingData.status !== 'cancelled') {
-         if (bookingData.seatIds && bookingData.seatIds.length > 0) {
-            const eventRef = doc(db, `apps/${APP_ID}/events`, bookingData.eventId);
-            const eventSnap = await transaction.get(eventRef);
-            
-            if (eventSnap.exists()) {
-              const eventData = eventSnap.data();
-              const seating = eventData.seating || {};
-              const updatedSeating = { ...seating };
-              
-              bookingData.seatIds.forEach(seatId => {
-                if (updatedSeating[seatId]) {
-                  updatedSeating[seatId].bookingId = null;
-                }
-              });
-              
-              transaction.update(eventRef, { seating: updatedSeating });
-            }
+         const eventRef = doc(db, `apps/${APP_ID}/events`, bookingData.eventId);
+         const eventSnap = await transaction.get(eventRef);
+         
+         if (eventSnap.exists()) {
+           const eventData = eventSnap.data();
+           const updatesForEvent: any = {};
+           let shouldUpdateEvent = false;
+
+           // Wenn es eine Privatbuchung ist, stornieren wir das gesamte Event
+           if (isPrivate || bookingData.bookingType === 'privat' || bookingData.isPrivate) {
+             updatesForEvent.status = 'cancelled';
+             shouldUpdateEvent = true;
+           }
+
+           // Freigabe der Sitzplätze (sowohl normale als auch private Buchungen können Sitzplätze reserviert haben)
+           if (bookingData.seatIds && bookingData.seatIds.length > 0) {
+             const seating = eventData.seating || {};
+             const updatedSeating = { ...seating };
+             
+             bookingData.seatIds.forEach(seatId => {
+               if (updatedSeating[seatId]) {
+                 updatedSeating[seatId].bookingId = null;
+               }
+             });
+             
+             updatesForEvent.seating = updatedSeating;
+             shouldUpdateEvent = true;
+           }
+
+           if (shouldUpdateEvent) {
+             transaction.update(eventRef, updatesForEvent);
+           }
          }
       }
 

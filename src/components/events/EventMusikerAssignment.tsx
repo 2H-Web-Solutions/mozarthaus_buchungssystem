@@ -15,8 +15,8 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
   const [ensemble, setEnsemble] = useState<EventEnsembleMember[]>(event.ensemble || []);
   const [isSaving, setIsSaving] = useState(false);
 
-  // We ensure at least 5 rows are rendered, without truncating larger ensembles
-  const minRows = Math.max(5, ensemble.length);
+  // We ensure at least 6 rows are rendered, without truncating larger ensembles
+  const minRows = Math.max(6, ensemble.length);
   const rows = Array.from({ length: minRows }, (_, i) => ensemble[i] || { musikerId: '', gage: 0, status: 'bestätigt', instrument: '', name: '' });
 
   const handleChange = (index: number, field: keyof EventEnsembleMember, value: any) => {

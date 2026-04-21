@@ -4,6 +4,7 @@ import { collection, onSnapshot, doc, query, orderBy, limit, getDocs, startAfter
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
+import { useAuth } from '../contexts/AuthContext';
 
 function EventOccupancy({ eventId }: { eventId: string }) {
   const [data, setData] = useState({
@@ -40,10 +41,13 @@ function EventOccupancy({ eventId }: { eventId: string }) {
       </span>
       <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
         <div 
-          className={`h-full transition-all duration-500 ${percentage > 90 ? 'bg-red-500' : percentage > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+          className={`h-full transition-all duration-500 ${percentage >= 80 ? 'bg-red-500' : percentage > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} 
           style={{ width: `${percentage}%` }}
         />
       </div>
+      {percentage >= 80 && (
+        <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-sm" title={`Auslastung bei ${percentage}% - Stop Sales empfohlen`}></div>
+      )}
     </div>
   );
 }
@@ -60,6 +64,9 @@ export function Events() {
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
+  const { appUser } = useAuth();
+  const role = appUser?.role || 'admin';
+  const isMusiker = role === 'musiker';
 
   const fetchTotalCount = async () => {
     try {
@@ -88,7 +95,7 @@ export function Events() {
     try {
       const baseColl = collection(db, `apps/${APP_ID}/events`);
 
-      if (filterType === 'all') {
+      if (filterType === 'all' && !isMusiker) {
         // --- Server-side Paginated Path ---
         let q = query(baseColl, orderBy('date', 'asc'), limit(pageSize));
         
@@ -126,9 +133,16 @@ export function Events() {
         
         // Filter in JS
         const filtered = fetchedEvents.filter(evt => {
-          if (filterType === 'privat') return evt.is_private === true;
-          if (filterType === 'regiondo') return !evt.is_private;
-          return true;
+          let matchesFilter = true;
+          if (filterType === 'privat') matchesFilter = evt.is_private === true;
+          if (filterType === 'regiondo') matchesFilter = !evt.is_private;
+          
+          if (matchesFilter && isMusiker && appUser?.linkedRecordId) {
+             const isAssigned = evt.ensemble?.some(member => member.musikerId === appUser.linkedRecordId);
+             if (!isAssigned) matchesFilter = false;
+          }
+
+          return matchesFilter;
         });
 
         // Set total count for the filtered view
@@ -150,7 +164,7 @@ export function Events() {
   };
 
   const handlePageChange = (direction: 'next' | 'prev') => {
-    if (filterType === 'all') {
+    if (filterType === 'all' && !isMusiker) {
       fetchEvents(direction);
       setCurrentPage(prev => direction === 'next' ? prev + 1 : prev - 1);
     } else {
@@ -166,7 +180,7 @@ export function Events() {
 
   // Handle local pagination for filtered views
   useEffect(() => {
-    if (filterType !== 'all') {
+    if (filterType !== 'all' || isMusiker) {
       fetchEvents('initial');
     }
   }, [currentPage]);
@@ -311,8 +325,14 @@ export function Events() {
                            Regiondo
                          </span>
                        )}
-                       <span className={`px-2 py-0.5 text-[10px] rounded-lg font-bold uppercase tracking-wider border ${evt.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                         {evt.status ? evt.status : 'IMPORTED'}
+                       <span className={`px-2 py-0.5 text-[10px] rounded-lg font-bold uppercase tracking-wider border ${
+                         evt.status === 'active' 
+                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                           : evt.status === 'cancelled'
+                           ? 'bg-red-50 text-red-700 border-red-100'
+                           : 'bg-slate-100 text-slate-600 border-slate-200'
+                       }`}>
+                         {evt.status === 'cancelled' ? 'STORNIERT' : (evt.status ? evt.status : 'IMPORTED')}
                        </span>
                      </div>
                    </td>
@@ -322,7 +342,7 @@ export function Events() {
                    <td className="p-4 pr-6 text-right">
                      <button 
                        onClick={(e) => { e.stopPropagation(); navigate(`/events/${evt.id}/belegungsplan`); }}
-                       className="opacity-0 group-hover:opacity-100 px-4 py-2 bg-white hover:bg-brand-primary hover:text-white text-brand-primary rounded-xl transition-all border border-brand-primary/20 font-bold text-xs shadow-sm shadow-brand-primary/5"
+                       className="px-4 py-2 bg-white hover:bg-brand-primary hover:text-white text-brand-primary rounded-xl transition-all border border-brand-primary/20 font-bold text-xs shadow-sm shadow-brand-primary/5"
                      >
                        Belegungsplan
                      </button>

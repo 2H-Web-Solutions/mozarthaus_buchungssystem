@@ -6,11 +6,14 @@ import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { logout } from '../services/firebase/authService';
 import { LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Sidebar() {
   const location = useLocation();
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [isStammdatenOpen, setIsStammdatenOpen] = useState(false);
+  const { appUser } = useAuth();
+  const role = appUser?.role || 'admin'; // fallback to admin if not found (or for existing unprotected use cases)
 
   useEffect(() => {
     if (location.pathname.startsWith('/stammdaten')) {
@@ -44,26 +47,27 @@ export function Sidebar() {
   }, []);
 
   const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Neue Reservierung', path: '/new-booking', icon: Ticket },
-    { name: 'Events / Termine', path: '/events', icon: CalendarDays },
-    { name: 'Status', path: '/kanban', icon: Columns },
-    { name: 'Transaktions-Log', path: '/bookings', icon: Calendar },
-    { name: 'Statistiken', path: '/statistics', icon: BarChart },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
+    { name: 'Neue Reservierung', path: '/new-booking', icon: Ticket, roles: ['admin', 'mitarbeiter'] },
+    { name: 'Events / Termine', path: '/events', icon: CalendarDays, roles: ['admin', 'mitarbeiter', 'musiker'] },
+    { name: 'Status', path: '/kanban', icon: Columns, roles: ['admin'] },
+    { name: 'Transaktions-Log', path: '/bookings', icon: Calendar, roles: ['admin'] },
+    { name: 'Statistiken', path: '/statistics', icon: BarChart, roles: ['admin'] },
     { 
       name: 'Stammdaten', 
       icon: Users,
+      roles: ['admin', 'mitarbeiter', 'musiker'],
       subItems: [
-        { name: 'Partner', path: '/stammdaten/partner' },
-        { name: 'Partner Typen', path: '/stammdaten/partner-types' },
-        { name: 'Musiker', path: '/stammdaten/musiker' },
-        { name: 'Mitarbeiter', path: '/stammdaten/mitarbeiter' },
-        { name: 'Preise & Kategorien', path: '/stammdaten/pricing' }
+        { name: 'Partner', path: '/stammdaten/partner', roles: ['admin'] },
+        { name: 'Partner Typen', path: '/stammdaten/partner-types', roles: ['admin'] },
+        { name: 'Musiker', path: '/stammdaten/musiker', roles: ['admin', 'musiker'] },
+        { name: 'Mitarbeiter', path: '/stammdaten/mitarbeiter', roles: ['admin', 'mitarbeiter'] },
+        { name: 'Preise & Kategorien', path: '/stammdaten/pricing', roles: ['admin'] },
+        { name: 'Admins', path: '/stammdaten/admin', roles: ['admin'] }
       ]
     },
-    // { name: 'Tasks', path: '/tasks', icon: undefined }, // Hidden for now
-    { name: 'Einstellungen', path: '/settings', icon: SettingsIcon },
-  ];
+    { name: 'Einstellungen', path: '/settings', icon: SettingsIcon, roles: ['admin'] },
+  ].filter(item => item.roles.includes(role));
 
   return (
     <div className="fixed inset-y-0 left-0 w-64 bg-brand-sidebar border-r border-gray-400 flex flex-col z-20">
@@ -110,7 +114,7 @@ export function Sidebar() {
                 
                 {isStammdatenOpen && (
                   <div className="ml-9 space-y-1 mt-1">
-                    {item.subItems.map(subItem => {
+                    {item.subItems.filter(sub => (sub as any).roles.includes(role)).map(subItem => {
                       const isSubActive = location.pathname === subItem.path;
                       return (
                         <Link

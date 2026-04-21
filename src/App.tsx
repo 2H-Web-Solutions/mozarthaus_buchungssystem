@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardShell } from './components/DashboardShell';
 import { Dashboard } from './pages/Dashboard';
 import { Tasks } from './pages/Tasks';
@@ -18,9 +18,23 @@ import { BookingFlow } from './components/booking/BookingFlow';
 import { SyncValidator } from './components/admin/SyncValidator';
 import { Statistics } from './pages/Statistics';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { Admins } from './pages/auth/Admins';
+
+// Helper component to redirect users based on their role logic
+function RoleBasedIndex() {
+  const { appUser } = useAuth();
+  
+  if (appUser?.role === 'musiker') {
+    return <Navigate to="/events" replace />;
+  }
+  if (appUser?.role === 'mitarbeiter') {
+    return <Navigate to="/new-booking" replace />;
+  }
+  return <Dashboard />;
+}
 
 function App() {
   return (
@@ -31,7 +45,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           <Route path="/" element={<ProtectedRoute><DashboardShell /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<RoleBasedIndex />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="events" element={<Events />} />
 
@@ -45,6 +59,7 @@ function App() {
           <Route path="stammdaten/musiker" element={<Musiker />} />
           <Route path="stammdaten/mitarbeiter" element={<Mitarbeiter />} />
           <Route path="stammdaten/pricing" element={<PricingCategories />} />
+          <Route path="stammdaten/admin" element={<Admins />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="settings" element={<Settings />} />
           <Route path="admin/system-test" element={<SyncValidator />} />

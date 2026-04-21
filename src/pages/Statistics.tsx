@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking, Event } from '../types/schema';
 import { BarChart, Ticket, TrendingUp, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
+import { getBookingDisplayData } from '../utils/bookingMapper';
 
 export function Statistics() {
   const now = new Date();
@@ -65,8 +66,9 @@ export function Statistics() {
       if (!dateVal) return new Date(0);
       if (dateVal.toDate) return dateVal.toDate();
       if (typeof dateVal === 'string') {
-          if (dateVal.includes('.')) {
-              const [d, m, y] = dateVal.split('.');
+          const datePart = dateVal.split(' ')[0];
+          if (datePart.includes('.')) {
+              const [d, m, y] = datePart.split('.');
               return new Date(`${y}-${m}-${d}T00:00:00`);
           }
           return new Date(dateVal);
@@ -88,11 +90,16 @@ export function Statistics() {
 
     let fBookings = bookings.filter(b => {
         let isDateValid = false;
-        if (b.eventId === 'manual') {
+        const bDateStr = b.lastPayload?.event_date_time || b.eventDate || b.dateTime;
+
+        if (b.eventId && validEventIds.includes(b.eventId)) {
+            isDateValid = true;
+        } else if (bDateStr) {
+            const parsed = parseEventDate(bDateStr);
+            isDateValid = parsed.getTime() > 0 && parsed >= start && parsed <= end;
+        } else {
             const bDate = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
             isDateValid = bDate >= start && bDate <= end;
-        } else {
-            isDateValid = validEventIds.includes(b.eventId);
         }
         if (!isDateValid) return false;
 
@@ -115,12 +122,14 @@ export function Statistics() {
     let tTickets = 0;
 
     fBookings.forEach(b => {
-      if (b.status !== 'cancelled') {
-        tRevenue += b.totalAmount || 0;
-        if (b.status === 'paid') {
-          pRevenue += b.totalAmount || 0;
+      const display = getBookingDisplayData(b);
+      // Regiondo statuses can vary (e.g. "cancelled", "storniert", etc.) but usually contain 'cancel' if we look for the english label
+      if (!display.status.includes('cancel')) {
+        tRevenue += display.totalAmount || 0;
+        if (display.status.includes('paid') || display.status.includes('bezahlt') || display.status === 'confirmed') {
+          pRevenue += display.totalAmount || 0;
         }
-        tTickets += b.seatIds ? b.seatIds.length : (b.tickets?.reduce((acc, t) => acc + (t.quantity || 1), 0) || 0);
+        tTickets += display.quantity || 0;
       }
     });
 
@@ -141,7 +150,7 @@ export function Statistics() {
        let resolvedEventDateString = '';
        let resolvedEventDateObject: Date | null = null;
 
-       if (b.eventId !== 'manual') {
+       if (b.eventId && events.some(ev => ev.id === b.eventId)) {
          const e = events.find(ev => ev.id === b.eventId);
          if (e && e.date) {
            const d = parseEventDate(e.date);
@@ -149,9 +158,16 @@ export function Statistics() {
            resolvedEventDateString = `${d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${e.time || ''}`;
          }
        } else {
-         const createdDate = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
-         resolvedEventDateObject = createdDate;
-         resolvedEventDateString = createdDate.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + createdDate.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+         const bDateStr = b.lastPayload?.event_date_time || b.eventDate || b.dateTime;
+         if (bDateStr) {
+             const d = parseEventDate(bDateStr);
+             resolvedEventDateObject = d;
+             resolvedEventDateString = d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+         } else {
+             const createdDate = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
+             resolvedEventDateObject = createdDate;
+             resolvedEventDateString = createdDate.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + createdDate.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+         }
        }
 
        return {
@@ -322,11 +338,12 @@ export function Statistics() {
               ) : (
                 filteredBookings.map(b => {
                   const partnerName = b.partnerId ? partners.find(p => p.id === b.partnerId)?.name : 'Direkt';
+                  const display = getBookingDisplayData(b);
                   return (
                     <tr key={b.id} className="border-b border-gray-50 hover:bg-red-50/30 transition-colors">
                       <td className="p-4">
-                        <div className="font-bold text-gray-900 text-base">{b.customerData.name}</div>
-                        <div className="text-sm text-gray-500 font-medium">{b.customerData.email}</div>
+                        <div className="font-bold text-gray-900 text-base">{display.customerName}</div>
+                        <div className="text-sm text-gray-500 font-medium">{display.customerEmail}</div>
                         {b.isB2B && <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded">B2B</span>}
                       </td>
                       <td className="p-4 text-gray-700 font-bold">
@@ -338,20 +355,19 @@ export function Statistics() {
                         </span>
                       </td>
                       <td className="p-4 text-gray-700 font-bold">
-                         {b.seatIds ? b.seatIds.length : (b.tickets?.reduce((acc, t) => acc + (t.quantity || 1), 0) || 0)} Plätze
+                         {display.quantity} Plätze
                       </td>
                       <td className="p-4">
                          <span className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full border ${
-                           b.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' :
-                           b.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                           b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                           display.status.includes('paid') || display.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
+                           display.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
                            'bg-yellow-50 text-yellow-700 border-yellow-200'
                          }`}>
-                           {b.status}
+                           {display.status}
                          </span>
                       </td>
                       <td className="p-4 text-right font-black text-gray-900 text-lg">
-                        € {b.totalAmount?.toLocaleString('de-AT', {minimumFractionDigits: 2})}
+                        € {display.totalAmount.toLocaleString('de-AT', {minimumFractionDigits: 2})}
                       </td>
                     </tr>
                   );

@@ -8,7 +8,7 @@ import type { Musiker } from '../../services/firebase/musikerService';
 import { SeatingChartVisual } from '../../components/events/SeatingChartVisual';
 import { EventMusikerAssignment } from '../../components/events/EventMusikerAssignment';
 import { EventBookingTable } from '../../components/events/EventBookingTable';
-import { ArrowLeft, FileText, Printer, Users, Music } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, Users, Music, AlertTriangle, X, Mail } from 'lucide-react';
 
 export function EventBelegungsplan() {
   const { eventId } = useParams();
@@ -17,6 +17,8 @@ export function EventBelegungsplan() {
   const [event, setEvent] = useState<Event | null>(null);
   const [musikerList, setMusikerList] = useState<Musiker[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [partners, setPartners] = useState<{name: string, email: string}[]>([]);
+  const [isStopSalesModalOpen, setIsStopSalesModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -68,11 +70,24 @@ export function EventBelegungsplan() {
       updateBookingsList();
     });
 
+    // 4. Fetch Partners for Stop-Sales
+    const unsubPartners = onSnapshot(collection(db, `apps/${APP_ID}/partners`), (snap) => {
+      const pList: {name: string, email: string}[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.email) {
+          pList.push({ name: data.name || data.companyName, email: data.email });
+        }
+      });
+      setPartners(pList);
+    });
+
     return () => {
       unsubEvent();
       unsubMusiker();
       unsubB1();
       unsubB2();
+      unsubPartners();
     };
   }, [eventId, navigate]);
 
@@ -90,7 +105,9 @@ export function EventBelegungsplan() {
   }
 
   // Calculate stats for visuals
-    
+  const bookedCount = Object.values(event.seating || {}).filter(s => !!s.bookingId).length;
+  const capacity = event.totalCapacity || 67;
+  const occupancyRate = bookedCount / capacity;
 
   const eventDateStr = typeof event.date !== 'string' && (event.date as any)?.toDate 
     ? (event.date as any).toDate().toLocaleDateString('de-AT', { dateStyle: 'full' }) 
@@ -137,7 +154,7 @@ export function EventBelegungsplan() {
             <div className="text-center">
               <span className="text-[10px] font-black uppercase text-gray-500 block">Teilnehmer</span>
               <p className="text-2xl font-black text-black">
-                {Object.values(event.seating || {}).filter(s => !!s.bookingId).length} / {event.totalCapacity || 67}
+                {bookedCount} / {capacity}
               </p>
             </div>
             <div className="w-px h-10 bg-gray-200"></div>
@@ -188,6 +205,25 @@ export function EventBelegungsplan() {
         </div>
       </div>
 
+      {/* Stop-Sales Banner */}
+      {occupancyRate >= 0.8 && (
+        <div className="mb-6 bg-red-100 text-red-800 border border-red-300 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between print:hidden shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3 mb-4 md:mb-0">
+            <AlertTriangle className="w-8 h-8 text-brand-red flex-shrink-0" />
+            <div>
+              <p className="font-bold text-lg">Achtung: Kapazitätsgrenze erreicht ({(occupancyRate * 100).toFixed(0)}%)</p>
+              <p className="text-sm opacity-90">Bitte benachrichtigen Sie die B2B Partner um Überbuchungen zu vermeiden.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setIsStopSalesModalOpen(true)}
+            className="px-5 py-2.5 bg-brand-red text-white font-bold rounded-lg hover:bg-red-800 transition shadow-md flex items-center gap-2 whitespace-nowrap"
+          >
+             <Mail className="w-5 h-5" /> Stop-Sales an Partner senden
+          </button>
+        </div>
+      )}
+
       {/* Page 1: Seating Chart & Musicians (Stacked in print) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-8 print:flex print:flex-col print:gap-8 print:w-full print:mt-2 print:mb-0">
         {/* Left/Top: Visueller Saalplan */}
@@ -198,11 +234,11 @@ export function EventBelegungsplan() {
                 Saalplan
             </div>
             <span className="text-sm font-bold bg-brand-red text-white px-3 py-1 rounded-full shadow-lg shadow-brand-red/10 animate-pulse">
-                {Object.values(event.seating || {}).filter(s => !!s.bookingId).length} / {event.totalCapacity || 67} Belegt
+                {bookedCount} / {capacity} Belegt
             </span>
           </h2>
           <div className="glass-card p-4 print:p-0 print:border-none print:shadow-none print:w-full">
-            <SeatingChartVisual eventId={eventId!} seating={event.seating} readOnly={true} />
+            <SeatingChartVisual eventId={eventId!} seating={event.seating} bookings={bookings} readOnly={true} />
           </div>
         </div>
         
@@ -229,6 +265,60 @@ export function EventBelegungsplan() {
             💡 TIPP: Klicken Sie auf "DRUCKEN" um eine physische Liste für den Einlass zu generieren. Erstattete Buchungen erscheinen hier nicht.
         </p>
       </div>
+
+      {/* Stop-Sales Modal */}
+      {isStopSalesModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative flex flex-col max-h-[80vh] animate-in zoom-in-95">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+               <h3 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                  <AlertTriangle className="text-brand-red w-6 h-6" /> Stop-Sales Benachrichtigung
+               </h3>
+               <button onClick={() => setIsStopSalesModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+                  <X className="w-5 h-5"/>
+               </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+               <p className="text-slate-600 mb-4 text-sm">
+                 Folgende Partner haben eine hinterlegte E-Mail-Adresse und werden ins <span className="font-bold text-slate-800">BCC (Blindkopie)</span> gesetzt:
+               </p>
+               <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4 max-h-64 overflow-y-auto">
+                 {partners.length === 0 ? (
+                   <p className="text-red-500 italic text-sm font-medium">Keine Partner mit E-Mail-Adresse im System gefunden.</p>
+                 ) : (
+                   <ul className="space-y-3">
+                     {partners.map((p, i) => (
+                       <li key={i} className="flex justify-between items-center text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                         <span className="font-bold text-slate-700">{p.name || 'Unbenannt'}</span>
+                         <span className="text-slate-500 bg-white px-2 py-1 rounded border border-slate-100">{p.email}</span>
+                       </li>
+                     ))}
+                   </ul>
+                 )}
+               </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50 rounded-b-2xl">
+               <button 
+                 onClick={() => setIsStopSalesModalOpen(false)}
+                 className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-200 hover:text-slate-900 rounded-lg transition-colors"
+               >
+                 Abbrechen
+               </button>
+               {partners.length > 0 && (
+                 <a 
+                   href={`mailto:?bcc=${partners.map(p => p.email).join(',')}&subject=${encodeURIComponent(`Stop Sales: Mozarthaus Konzert am ${eventDateStr}`)}&body=${encodeURIComponent(`Sehr geehrte Partner,\n\nbitte stoppen Sie ab sofort den Ticketverkauf für das Konzert am ${eventDateStr}, da wir die Kapazitätsgrenze erreicht haben.\n\nVielen Dank.`)}`}
+                   className="px-5 py-2.5 bg-brand-red text-white font-bold rounded-lg hover:bg-red-800 transition shadow-md flex items-center gap-2"
+                   onClick={() => setIsStopSalesModalOpen(false)}
+                 >
+                   E-Mail Programm öffnen
+                 </a>
+               )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

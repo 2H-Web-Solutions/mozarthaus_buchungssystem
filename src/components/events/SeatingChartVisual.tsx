@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { SEATING_PLAN_TEMPLATE } from '../../config/seatingPlan';
 import { X } from 'lucide-react';
 import { createBooking } from '../../services/bookingService';
+import { Booking } from '../../types/schema';
+import { getBookingDisplayData } from '../../utils/bookingMapper';
 
 interface Props {
   eventId: string;
@@ -11,10 +13,11 @@ interface Props {
     row: string,
     number: number
   }>;
+  bookings?: Booking[];
   readOnly?: boolean;
 }
 
-export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: Props) {
+export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readOnly = false }: Props) {
   const [selectedSeat, setSelectedSeat] = useState<{ id: string, name: string, category: string } | null>(null);
   const [customerName, setCustomerName] = useState('Abendkasse');
   const [paymentMethod, setPaymentMethod] = useState<'bar' | 'karte'>('bar');
@@ -113,6 +116,17 @@ export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: 
               
               const isBooked = !!seating[el.id]?.bookingId;
               const category = seating[el.id]?.category || 'B';
+              const bkId = seating[el.id]?.bookingId;
+              const booking = bkId ? bookings.find(b => b.id === bkId) : null;
+              
+              let customerName = '';
+              if (booking) {
+                const display = getBookingDisplayData(booking);
+                customerName = display.customerName;
+              }
+              
+              const seatLabel = `${el.id.replace(/row_|_seat_/g, ' ').toUpperCase()} (Cat ${category})`;
+              const displayTitle = isBooked && customerName ? `${seatLabel} - ${customerName}` : seatLabel;
               
               return (
                 <button 
@@ -120,7 +134,7 @@ export function SeatingChartVisual({ eventId, seating = {}, readOnly = false }: 
                   disabled={isBooked || readOnly}
                   onClick={() => !readOnly && openQuickSell(el.id)}
                   className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors print:w-5 print:h-5 ${getSeatColor(el.id)} ${isBooked || readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  title={`${el.id.replace(/row_|_seat_/g, ' ').toUpperCase()} (Cat ${category})`}
+                  title={displayTitle}
                 >
                   {isBooked ? (
                     <div className={`w-2.5 h-2.5 rounded-full ${getDotColor(category)} print:hidden`}></div>

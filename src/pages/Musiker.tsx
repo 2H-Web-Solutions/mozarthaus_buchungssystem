@@ -3,7 +3,10 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { createMusiker, deleteMusiker, updateMusiker, type Musiker as MusikerType } from '../services/firebase/musikerService';
-import { Plus, User, Trash2, Edit2, Archive, RefreshCw } from 'lucide-react';
+import { Plus, User, Trash2, Edit2, Archive, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { createDigitalRole } from '../services/firebase/adminAuthService';
+import toast from 'react-hot-toast';
 
 export function Musiker() {
   const [musikerList, setMusikerList] = useState<MusikerType[]>([]);
@@ -11,6 +14,16 @@ export function Musiker() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterInstrument, setFilterInstrument] = useState('');
+
+  const { appUser } = useAuth();
+  const role = appUser?.role || 'admin';
+
+  // Digital Role State
+  const [enableDigitalRole, setEnableDigitalRole] = useState(false);
+  const [digitalEmail, setDigitalEmail] = useState('');
+  const [digitalPassword, setDigitalPassword] = useState('');
 
   // Form State
   const [art, setArt] = useState('Musiker');
@@ -55,6 +68,9 @@ export function Musiker() {
     setEmail('');
     setSteuernummer('');
     setSteuersatz(0);
+    setEnableDigitalRole(false);
+    setDigitalEmail('');
+    setDigitalPassword('');
   };
 
   const openNewModal = () => {
@@ -75,6 +91,9 @@ export function Musiker() {
     setEmail(m.email || '');
     setSteuernummer(m.steuernummer || '');
     setSteuersatz(m.steuersatz || 0);
+    setEnableDigitalRole(false);
+    setDigitalEmail('');
+    setDigitalPassword('');
     setIsModalOpen(true);
   };
 
@@ -102,6 +121,16 @@ export function Musiker() {
         steuersatz,
         active: true
       });
+
+      if (enableDigitalRole && digitalEmail && digitalPassword) {
+        try {
+          await createDigitalRole(digitalEmail, digitalPassword, 'musiker', id);
+          toast.success('Digitale Rolle erfolgreich angelegt!');
+        } catch (err: any) {
+          toast.error(err.message || 'Fehler beim Anlegen der digitalen Rolle');
+        }
+      }
+
       setIsModalOpen(false);
       resetForm();
     } catch (err) {
@@ -130,7 +159,23 @@ export function Musiker() {
     }
   };
 
-  const displayedMusiker = musikerList.filter(m => activeTab === 'active' ? m.active : !m.active);
+  const displayedMusiker = musikerList.filter(m => {
+    const isTabMatch = activeTab === 'active' ? m.active : !m.active;
+    const searchLower = searchQuery.toLowerCase();
+    const isSearchMatch = 
+      m.vorname.toLowerCase().includes(searchLower) ||
+      m.nachname.toLowerCase().includes(searchLower) ||
+      (m.email && m.email.toLowerCase().includes(searchLower)) ||
+      (m.instrument && m.instrument.toLowerCase().includes(searchLower));
+      
+    const isInstrumentMatch = filterInstrument ? m.instrument === filterInstrument : true;
+    
+    const isAllowed = role === 'admin' ? true : m.id === appUser?.linkedRecordId;
+    
+    return isTabMatch && isSearchMatch && isInstrumentMatch && isAllowed;
+  });
+
+  const uniqueInstruments = Array.from(new Set(musikerList.map(m => m.instrument).filter(Boolean))).sort();
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -146,8 +191,9 @@ export function Musiker() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex space-x-4 mb-6 border-b border-gray-200">
+      {/* Tabs & Search */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-200 pb-2">
+        <div className="flex space-x-4">
         <button
           onClick={() => setActiveTab('active')}
           className={`py-2 px-4 font-medium text-sm transition-colors border-b-2 ${
@@ -168,6 +214,32 @@ export function Musiker() {
         >
           Archivierte Musiker
         </button>
+        </div>
+
+        {/* Search & Filter */}
+        <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+           <select 
+             value={filterInstrument}
+             onChange={e => setFilterInstrument(e.target.value)}
+             className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary w-full md:w-48 bg-white"
+           >
+             <option value="">Alle Instrumente</option>
+             {uniqueInstruments.map(inst => (
+               <option key={inst} value={inst}>{inst}</option>
+             ))}
+           </select>
+           
+           <div className="relative w-full md:w-64">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+             <input 
+               type="text" 
+               placeholder="Musiker suchen..." 
+               value={searchQuery}
+               onChange={e => setSearchQuery(e.target.value)}
+               className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+             />
+           </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -177,19 +249,21 @@ export function Musiker() {
               <button onClick={() => openEditModal(m)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Bearbeiten">
                 <Edit2 className="w-4 h-4" />
               </button>
-              {activeTab === 'active' ? (
-                <button onClick={() => handleArchive(m.id, false)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md" title="Archivieren">
-                  <Archive className="w-4 h-4" />
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => handleArchive(m.id, true)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md" title="Wiederherstellen">
-                    <RefreshCw className="w-4 h-4" />
+              {role === 'admin' && (
+                activeTab === 'active' ? (
+                  <button onClick={() => handleArchive(m.id, false)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md" title="Archivieren">
+                    <Archive className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(m.id, `${m.vorname} ${m.nachname}`)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-md" title="Endgültig löschen">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </>
+                ) : (
+                  <>
+                    <button onClick={() => handleArchive(m.id, true)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md" title="Wiederherstellen">
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(m.id, `${m.vorname} ${m.nachname}`)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-md" title="Endgültig löschen">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )
               )}
             </div>
 
@@ -276,6 +350,52 @@ export function Musiker() {
                   <label className="block text-sm text-gray-700 mb-1">Steuersatz (%)</label>
                   <input type="number" step="0.1" value={steuersatz} onChange={e => setSteuersatz(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
                </div>
+
+               {role === 'admin' && (
+                 <div className="col-span-1 md:col-span-2 mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                   <div className="flex items-center gap-2 mb-4">
+                     <input 
+                       type="checkbox" 
+                       id="digitalRole"
+                       checked={enableDigitalRole}
+                       onChange={e => setEnableDigitalRole(e.target.checked)}
+                       className="w-4 h-4 text-brand-primary rounded border-gray-300 focus:ring-brand-primary"
+                     />
+                     <label htmlFor="digitalRole" className="font-bold flex items-center gap-2 text-blue-900 cursor-pointer">
+                       <ShieldCheck className="w-5 h-5 text-blue-600" />
+                       Digitale Rolle aktivieren (Login)
+                     </label>
+                   </div>
+                   
+                   {enableDigitalRole && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-blue-200 ml-2">
+                       <div>
+                         <label className="block text-sm text-blue-800 mb-1">Login E-Mail *</label>
+                         <input 
+                           type="email" 
+                           required={enableDigitalRole}
+                           value={digitalEmail} 
+                           onChange={e => setDigitalEmail(e.target.value)} 
+                           placeholder="vorname@beispiel.at"
+                           className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-sm text-blue-800 mb-1">Passwort *</label>
+                         <input 
+                           type="password" 
+                           required={enableDigitalRole}
+                           minLength={6}
+                           value={digitalPassword} 
+                           onChange={e => setDigitalPassword(e.target.value)} 
+                           placeholder="Mindestens 6 Zeichen"
+                           className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
+                         />
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               )}
                
                <div className="col-span-1 md:col-span-2 flex gap-3 justify-end mt-6">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded focus:outline-none">Abbrechen</button>

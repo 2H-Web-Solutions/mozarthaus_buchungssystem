@@ -1,5 +1,12 @@
 import { Timestamp } from 'firebase/firestore';
 
+export interface AppUser {
+  id: string; // Auth UID or email
+  email: string;
+  role: 'admin' | 'mitarbeiter' | 'musiker';
+  linkedRecordId?: string; // ID from musiker or mitarbeiter collection
+}
+
 export interface EventEnsembleMember {
   musikerId: string;
   name: string;
@@ -95,6 +102,11 @@ export interface Partner {
   telefon?: string;
   steuernummer?: string;
   aktiv?: boolean;
+  
+  // Custom billing/contact fields added from Partners page
+  bezahloption?: string;
+  bezahlinformation?: string;
+  website?: string;
 }
 
 export interface TicketCategory {
