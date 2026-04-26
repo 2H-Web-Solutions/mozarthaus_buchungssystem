@@ -435,7 +435,7 @@ export function BookingFlow() {
                    ))}
                  </select>
                </div>
-               {bookingType !== 'privat' && (
+               {bookingType === 'einzel' && (
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif / Rabattaktion</label>
                    <select
@@ -550,25 +550,13 @@ export function BookingFlow() {
           </h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {categories.filter(cat => !cat.type || cat.type === 'main').map(mainCat => {
-                const effectiveOption = selectedTariffGroup 
-                  ? categories.find(c => c.type === 'variant' && c.parentId === mainCat.id && c.tariffGroup === selectedTariffGroup)
-                  : mainCat;
-                
-                const isAvailable = !!effectiveOption;
-                const optionId = isAvailable ? effectiveOption.id : mainCat.id;
-
-                if (!isAvailable) return null;
-
-                return (
-                  <label key={mainCat.id} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === optionId ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
-                    <input type="radio" value={optionId} className="hidden" onChange={() => setDoubleCategoryId(optionId)} />
-                    <div className="w-3 h-3 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: mainCat.colorCode }}></div>
-                    <span className="text-base font-bold text-center">{mainCat.name}</span>
-                    {selectedTariffGroup && <span className="text-xs text-gray-500 text-center">{effectiveOption.price.toFixed(2)} €</span>}
-                  </label>
-                );
-              })}
+              {categories.filter(cat => !cat.type || cat.type === 'main').map(cat => (
+                <label key={cat.id} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === cat.id ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
+                  <input type="radio" value={cat.id} className="hidden" onChange={() => setDoubleCategoryId(cat.id)} />
+                  <div className="w-3 h-3 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: cat.colorCode }}></div>
+                  <span className="text-base font-bold text-center">{cat.name}</span>
+                </label>
+              ))}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
