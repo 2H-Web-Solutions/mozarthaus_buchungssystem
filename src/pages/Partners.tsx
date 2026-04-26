@@ -5,11 +5,17 @@ import { APP_ID } from '../lib/constants';
 import { Partner } from '../types/schema';
 import { runPartnerImport } from '../utils/importPartnerData';
 import { Plus, Users, Search, Edit2, Archive, ArchiveRestore } from 'lucide-react';
+import { useAdmin } from '../hooks/useAdmin';
+import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
 
 export function Partners() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const { isAdmin } = useAdmin();
+  const [partnerToArchive, setPartnerToArchive] = useState<Partner | null>(null);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   // List State
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,12 +183,19 @@ export function Partners() {
     }
   };
 
-  const handleToggleArchive = async (partner: Partner) => {
-    if (!window.confirm(partner.aktiv === false ? 'Partner wieder herstellen?' : 'Partner archivieren (wird ausgeblendet)?')) return;
+  const confirmArchive = (partner: Partner) => {
+    setPartnerToArchive(partner);
+    setIsArchiveModalOpen(true);
+  };
+
+  const handleArchive = async () => {
+    if (!partnerToArchive) return;
     try {
-      await updateDoc(doc(db, `apps/${APP_ID}/partners`, partner.id), {
-        aktiv: partner.aktiv === false ? true : false
+      await updateDoc(doc(db, `apps/${APP_ID}/partners`, partnerToArchive.id), {
+        aktiv: partnerToArchive.aktiv === false ? true : false
       });
+      setIsArchiveModalOpen(false);
+      setPartnerToArchive(null);
     } catch(err) {
       console.error(err);
       alert('Fehler beim Ändern des Status');
@@ -194,27 +207,31 @@ export function Partners() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h1 className="text-2xl font-heading text-brand-primary">B2B Partner & Agenturen</h1>
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={async () => {
-              if (!window.confirm('Achtung: Sollen die Partner-Rohdaten in die Datenbank importiert werden?')) return;
-              try {
-                await runPartnerImport();
-                alert('Partner-Import abgeschlossen!');
-              } catch (err) {
-                console.error(err);
-                alert('Import fehlgeschlagen!');
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold text-sm"
-          >
-            DEV: Bulk Import Partner
-          </button>
-          <button 
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-red-700 transition text-sm"
-          >
-            <Plus className="w-4 h-4"/> Neuer Partner
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={async () => {
+                  if (!window.confirm('Achtung: Sollen die Partner-Rohdaten in die Datenbank importiert werden?')) return;
+                  try {
+                    await runPartnerImport();
+                    alert('Partner-Import abgeschlossen!');
+                  } catch (err) {
+                    console.error(err);
+                    alert('Import fehlgeschlagen!');
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold text-sm"
+              >
+                DEV: Bulk Import Partner
+              </button>
+              <button 
+                onClick={openCreateModal}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-red-700 transition text-sm"
+              >
+                <Plus className="w-4 h-4"/> Neuer Partner
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -263,22 +280,24 @@ export function Partners() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAndSortedPartners.map(p => (
           <div key={p.id} className={`bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col relative group transition ${p.aktiv === false ? 'opacity-60 grayscale' : ''}`}>
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition">
-              <button 
-                onClick={() => openEditModal(p)}
-                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"
-                title="Partner bearbeiten"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => handleToggleArchive(p)}
-                className={`p-1.5 rounded-md transition ${p.aktiv === false ? 'text-green-600 hover:bg-green-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
-                title={p.aktiv === false ? "Partner wiederherstellen" : "Partner archivieren"}
-              >
-                {p.aktiv === false ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                <button 
+                  onClick={() => openEditModal(p)}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"
+                  title="Partner bearbeiten"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => confirmArchive(p)}
+                  className={`p-1.5 rounded-md transition ${p.aktiv === false ? 'text-green-600 hover:bg-green-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
+                  title={p.aktiv === false ? "Partner wiederherstellen" : "Partner archivieren"}
+                >
+                  {p.aktiv === false ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary">
@@ -404,14 +423,24 @@ export function Partners() {
 
                <div className="flex gap-3 justify-end mt-8 pt-4 border-t border-gray-200">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium">Abbrechen</button>
-                 <button disabled={isSaving} type="submit" className="px-6 py-2 bg-brand-primary text-white rounded hover:bg-red-700 disabled:opacity-50 font-bold">
-                   {isSaving ? 'Speichert...' : (editingPartnerId ? 'Änderungen speichern' : 'Partner anlegen')}
-                 </button>
+                 {isAdmin && (
+                   <button disabled={isSaving} type="submit" className="px-6 py-2 bg-brand-primary text-white rounded hover:bg-red-700 disabled:opacity-50 font-bold">
+                     {isSaving ? 'Speichert...' : (editingPartnerId ? 'Änderungen speichern' : 'Partner anlegen')}
+                   </button>
+                 )}
                </div>
              </form>
            </div>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        onConfirm={handleArchive}
+        title={partnerToArchive?.aktiv === false ? "Partner wiederherstellen" : "Partner archivieren"}
+        message={`Möchten Sie den Partner '${partnerToArchive?.companyName}' wirklich ${partnerToArchive?.aktiv === false ? 'wiederherstellen' : 'archivieren (wird ausgeblendet)'}?`}
+      />
     </div>
   );
 }

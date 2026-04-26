@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 import { createRoot } from 'react-dom/client';
 import html2pdf from 'html2pdf.js';
 import toast from 'react-hot-toast';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
-import { ArrowLeft, Printer, CalendarDays, CalendarClock, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Printer, CalendarDays, CalendarClock, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { HonorarnoteTemplateView, Gig } from '../components/admin/HonorarnoteTemplateView';
 import { Musiker } from '../services/firebase/musikerService';
+import { useAuth } from '../contexts/AuthContext';
+import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
 
 const PRIMARY_COLOR = '#c02a2a';
 
@@ -35,6 +37,9 @@ function padTo2Digits(num: number) {
 
 export function MusicianDetail() {
   const { id } = useParams<{ id: string }>();
+  const { appUser } = useAuth();
+  const isAdmin = appUser?.role === 'admin';
+
   const [musician, setMusician] = useState<Musiker | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,6 +47,75 @@ export function MusicianDetail() {
   const [groupedHistory, setGroupedHistory] = useState<Record<string, { month: number, year: number, monthName: string, gigs: Gig[], totalGage: number }>>({});
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedEventToDelete, setSelectedEventToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedEventToEdit, setSelectedEventToEdit] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', gage: 0 });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const confirmDelete = (eventId: string) => {
+      setSelectedEventToDelete(eventId);
+      setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteEvent = async () => {
+      if (!selectedEventToDelete) return;
+      setIsDeleting(true);
+      try {
+          await deleteDoc(doc(db, `apps/${APP_ID}/events`, selectedEventToDelete));
+          toast.success('Event erfolgreich gelöscht!');
+          setIsDeleteModalOpen(false);
+          setSelectedEventToDelete(null);
+          setReloadTrigger(prev => prev + 1);
+      } catch (err) {
+          console.error("Delete Error", err);
+          toast.error("Fehler beim Löschen des Events.");
+      } finally {
+          setIsDeleting(false);
+      }
+  };
+
+  const openEdit = (gig: Gig) => {
+      setSelectedEventToEdit(gig.id as string);
+      setEditForm({ title: gig.title || '', gage: gig.gage });
+      setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedEventToEdit || !id) return;
+      setIsSavingEdit(true);
+      try {
+          const eventRef = doc(db, `apps/${APP_ID}/events`, selectedEventToEdit);
+          const evSnap = await getDoc(eventRef);
+          if (evSnap.exists()) {
+              const evData = evSnap.data();
+              const newEnsemble = evData.ensemble?.map((mem: any) => {
+                  if (mem.musikerId === id) {
+                      return { ...mem, gage: Number(editForm.gage) };
+                  }
+                  return mem;
+              });
+              await updateDoc(eventRef, {
+                  title: editForm.title,
+                  ensemble: newEnsemble
+              });
+              toast.success('Event erfolgreich aktualisiert!');
+              setIsEditModalOpen(false);
+              setReloadTrigger(prev => prev + 1);
+          }
+      } catch (err) {
+          console.error(err);
+          toast.error("Fehler beim Aktualisieren.");
+      } finally {
+          setIsSavingEdit(false);
+      }
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -117,6 +191,8 @@ export function MusicianDetail() {
                         });
                     } else {
                         pastGigs.push({
+                            id: e.id,
+                            title: e.title || 'Konzert in der Sala Terrena',
                             eventDate: d,
                             gage: member.gage || 0,
                             time: e.time || '20:00'
@@ -151,6 +227,8 @@ export function MusicianDetail() {
 
             const dateStr = `${padTo2Digits(g.eventDate.getDate())}.${padTo2Digits(month + 1)}.${year}`;
             grouped[key].gigs.push({
+                id: g.id,
+                title: g.title,
                 dateStr: `${dateStr} ${g.time}`,
                 gage: g.gage
             });
@@ -169,7 +247,7 @@ export function MusicianDetail() {
         setGroupedHistory(grouped);
     }
     loadEvents();
-  }, [id]);
+  }, [id, reloadTrigger]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
@@ -387,28 +465,55 @@ export function MusicianDetail() {
 
                       return (
                           <div key={key} className="flex flex-col justify-between p-3 rounded-md border border-gray-200 bg-gray-50/50 hover:bg-gray-50 transition">
-                              <div className="mb-2">
-                                  <h3 className="font-bold text-sm text-gray-900">{data.monthName}</h3>
-                                  <div className="text-xs text-gray-500 flex gap-3 mt-0.5">
-                                      <span>{data.gigs.length} Gigs</span>
-                                      <span className="font-medium text-gray-800">Brutto: {totalBrutto.toLocaleString('de-DE', { style: 'currency', currency: 'EUR'})}</span>
+                              <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                      <h3 className="font-bold text-sm text-gray-900">{data.monthName}</h3>
+                                      <div className="text-xs text-gray-500 flex gap-3 mt-0.5">
+                                          <span>{data.gigs.length} Gigs</span>
+                                          <span className="font-medium text-gray-800">Brutto: {totalBrutto.toLocaleString('de-DE', { style: 'currency', currency: 'EUR'})}</span>
+                                      </div>
                                   </div>
-                              </div>
-                              <div className="mt-1 flex justify-end">
                                   <button 
                                       onClick={() => handleGeneratePdf(key)}
                                       disabled={isGeneratingPdf === key}
-                                      className="inline-flex items-center justify-center min-w-[120px] gap-1.5 px-2.5 py-1 font-bold text-xs bg-gray-800 text-white rounded hover:bg-gray-700 transition disabled:opacity-50"
+                                      className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 font-bold text-xs bg-gray-800 text-white rounded hover:bg-gray-700 transition disabled:opacity-50"
                                   >
                                       {isGeneratingPdf === key ? (
                                           <div className="w-3.5 h-3.5 rounded-full border-t-2 border-r-2 border-white animate-spin"></div>
                                       ) : (
-                                          <>
-                                              <Printer className="w-3.5 h-3.5" />
-                                              PDF Generieren
-                                          </>
+                                          <><Printer className="w-3.5 h-3.5" /> PDF</>
                                       )}
                                   </button>
+                              </div>
+
+                              <div className="space-y-1.5 border-t border-gray-200 pt-3">
+                                  {data.gigs.map((g, idx) => (
+                                      <div key={idx} className="flex items-center justify-between text-xs bg-white border border-gray-100 rounded px-2 py-1.5 shadow-sm">
+                                          <div className="flex flex-col">
+                                              <span className="font-bold text-gray-800">{g.dateStr}</span>
+                                              <span className="text-gray-500 truncate max-w-[150px] sm:max-w-[200px]">{g.title}</span>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                              <span className="font-medium text-gray-900">€ {g.gage}</span>
+                                              {isAdmin && g.id && (
+                                                  <div className="flex items-center gap-1 ml-2 border-l border-gray-200 pl-2">
+                                                      <button 
+                                                        onClick={() => openEdit(g)} 
+                                                        className="p-1 text-gray-400 hover:text-blue-600 transition"
+                                                      >
+                                                          <Pencil className="w-3.5 h-3.5" />
+                                                      </button>
+                                                      <button 
+                                                        onClick={() => confirmDelete(g.id as string)}
+                                                        className="p-1 text-gray-400 hover:text-red-600 transition"
+                                                      >
+                                                          <Trash2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                  </div>
+                                              )}
+                                          </div>
+                                      </div>
+                                  ))}
                               </div>
                           </div>
                       );
@@ -417,6 +522,38 @@ export function MusicianDetail() {
           )}
       </div>
 
+      <ConfirmDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteEvent}
+        title="Event löschen"
+        message="Möchten Sie dieses Event wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden und entfernt das Event auch für alle anderen zugeteilten Musiker."
+        isLoading={isDeleting}
+      />
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Event bearbeiten</h3>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Event Titel</label>
+                <input required value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Gage (€)</label>
+                <input required type="number" step="0.01" value={editForm.gage} onChange={e => setEditForm({...editForm, gage: Number(e.target.value)})} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary outline-none" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Abbrechen</button>
+                <button type="submit" disabled={isSavingEdit} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2">
+                  {isSavingEdit ? 'Speichert...' : 'Speichern'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

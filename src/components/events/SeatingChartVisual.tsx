@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SEATING_PLAN_TEMPLATE } from '../../config/seatingPlan';
 import { X } from 'lucide-react';
 import { createBooking } from '../../services/bookingService';
 import { Booking } from '../../types/schema';
 import { getBookingDisplayData } from '../../utils/bookingMapper';
+import { listenTicketCategories } from '../../services/firebase/pricingService';
 
 interface Props {
   eventId: string;
@@ -18,6 +19,27 @@ interface Props {
 }
 
 export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readOnly = false }: Props) {
+  const [categories, setCategories] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const unsub = listenTicketCategories(setCategories);
+    return () => unsub();
+  }, []);
+
+  const baseCategoryColors = useMemo(() => {
+    const mapping: Record<string, string> = {
+      'A': '#BC6868',
+      'B': '#2D7FBD',
+      'STUDENT': '#96BF33'
+    };
+    categories.filter(c => !c.type || c.type === 'main').forEach(c => {
+      if (c.name.toLowerCase().includes('a')) mapping['A'] = c.colorCode || mapping['A'];
+      if (c.name.toLowerCase().includes('b')) mapping['B'] = c.colorCode || mapping['B'];
+      if (c.name.toLowerCase().includes('student')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
+    });
+    return mapping;
+  }, [categories]);
+
   const [selectedSeat, setSelectedSeat] = useState<{ id: string, name: string, category: string } | null>(null);
   const [customerName, setCustomerName] = useState('Abendkasse');
   const [paymentMethod, setPaymentMethod] = useState<'bar' | 'karte'>('bar');
@@ -32,27 +54,20 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
 
   const getSeatColor = (seatId: string) => {
     const seat = seating[seatId];
-    if (!seat) return 'border-gray-200 bg-gray-50';
+    if (!seat) return { className: 'border-gray-200 bg-gray-50', style: {} };
     
     const isBooked = !!seat.bookingId;
-    if (!isBooked) return 'border-gray-300 bg-white hover:border-brand-primary/50';
+    if (!isBooked) return { className: 'border-gray-300 bg-white hover:border-brand-primary/50', style: {} };
 
-    // Occupied colors by category
-    switch (seat.category) {
-      case 'A': return 'border-[#BC6868] bg-[#BC6868]/10 text-[#BC6868]';
-      case 'B': return 'border-[#2D7FBD] bg-[#2D7FBD]/10 text-[#2D7FBD]';
-      case 'STUDENT': return 'border-[#96BF33] bg-[#96BF33]/10 text-[#96BF33]';
-      default: return 'border-brand-primary bg-brand-primary/10';
-    }
+    const color = baseCategoryColors[seat.category] || baseCategoryColors['B'];
+    return { 
+      className: '', 
+      style: { backgroundColor: `${color}1A`, borderColor: color, color: color } 
+    };
   };
 
   const getDotColor = (category: string) => {
-    switch (category) {
-      case 'A': return 'bg-[#BC6868]';
-      case 'B': return 'bg-[#2D7FBD]';
-      case 'STUDENT': return 'bg-[#96BF33]';
-      default: return 'bg-brand-primary';
-    }
+    return baseCategoryColors[category] || baseCategoryColors['B'];
   };
 
   const openQuickSell = (seatId: string) => {
@@ -128,16 +143,19 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
               const seatLabel = `${el.id.replace(/row_|_seat_/g, ' ').toUpperCase()} (Cat ${category})`;
               const displayTitle = isBooked && customerName ? `${seatLabel} - ${customerName}` : seatLabel;
               
+              const seatStyle = getSeatColor(el.id);
+              
               return (
                 <button 
                   key={el.id}
                   disabled={isBooked || readOnly}
                   onClick={() => !readOnly && openQuickSell(el.id)}
-                  className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors print:w-5 print:h-5 ${getSeatColor(el.id)} ${isBooked || readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors print:w-5 print:h-5 ${seatStyle.className} ${isBooked || readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  style={seatStyle.style}
                   title={displayTitle}
                 >
                   {isBooked ? (
-                    <div className={`w-2.5 h-2.5 rounded-full ${getDotColor(category)} print:hidden`}></div>
+                    <div className={`w-2.5 h-2.5 rounded-full print:hidden`} style={{ backgroundColor: getDotColor(category) }}></div>
                   ) : null}
                 </button>
               );
@@ -156,13 +174,13 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
             <div className="w-4 h-4 border-2 border-gray-300 rounded bg-white"></div> Frei
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#BC6868]"></div> Kat. A (Reihe A-C)
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: baseCategoryColors['A'] }}></div> Kat. A (Reihe A-C)
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#2D7FBD]"></div> Kat. B (Reihe D-F)
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: baseCategoryColors['B'] }}></div> Kat. B (Reihe D-F)
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-[#96BF33]"></div> Student
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: baseCategoryColors['STUDENT'] }}></div> Student
           </div>
         </div>
       </div>
@@ -181,7 +199,7 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Platz & Kategorie</label>
                 <div className="p-2 bg-gray-50 border border-gray-200 rounded font-medium text-gray-900 text-center flex justify-between items-center">
                   <span>{selectedSeat.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full text-white ${getDotColor(selectedSeat.category)}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full text-white`} style={{ backgroundColor: getDotColor(selectedSeat.category) }}>
                     KATEGORIE {selectedSeat.category}
                   </span>
                 </div>

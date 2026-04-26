@@ -1,6 +1,8 @@
 import { Musiker } from '../../services/firebase/musikerService';
 
 export interface Gig {
+  id?: string;
+  title?: string;
   dateStr: string;
   gage: number;
 }

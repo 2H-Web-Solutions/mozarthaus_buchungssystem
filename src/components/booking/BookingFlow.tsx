@@ -125,33 +125,48 @@ export function BookingFlow() {
   const categoryAllocations = useMemo(() => {
     const allocs: { id: string; name: string; quantity: number; colorCode: string }[] = [];
     if (bookingType === 'einzel') {
-      let index = 0;
-      const colors = ['#D4AF37', '#1E3A8A', '#10B981', '#a855f7', '#ec4899', '#f97316'];
       categories.forEach(c => {
         const q = quantities[c.id] || 0;
         if (q > 0) {
+          const isVariant = c.type === 'variant';
+          const mainCat = isVariant ? categories.find(m => m.id === c.parentId) : c;
           allocs.push({
             id: c.id,
-            name: c.name,
+            name: mainCat ? mainCat.name : c.name,
             quantity: q,
-            colorCode: colors[index % colors.length]
+            colorCode: mainCat ? mainCat.colorCode : (c.colorCode || '#D4AF37')
           });
-          index++;
         }
       });
     } else if (bookingType === 'double') {
       const cat = categories.find(c => c.id === doubleCategoryId);
       if (cat && Number(doubleTickets) > 0) {
+        const isVariant = cat.type === 'variant';
+        const mainCat = isVariant ? categories.find(m => m.id === cat.parentId) : cat;
         allocs.push({
           id: cat.id,
-          name: cat.name,
+          name: mainCat ? mainCat.name : cat.name,
           quantity: Number(doubleTickets),
-          colorCode: '#D4AF37'
+          colorCode: mainCat ? mainCat.colorCode : (cat.colorCode || '#D4AF37')
         });
       }
     }
     return allocs;
   }, [bookingType, categories, quantities, doubleCategoryId, doubleTickets]);
+
+  const baseCategoryColors = useMemo(() => {
+    const mapping: Record<string, string> = {
+      'A': '#D4AF37',
+      'B': '#1E3A8A',
+      'STUDENT': '#10B981'
+    };
+    categories.filter(c => !c.type || c.type === 'main').forEach(c => {
+      if (c.name.toLowerCase().includes('a')) mapping['A'] = c.colorCode || mapping['A'];
+      if (c.name.toLowerCase().includes('b')) mapping['B'] = c.colorCode || mapping['B'];
+      if (c.name.toLowerCase().includes('student')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
+    });
+    return mapping;
+  }, [categories]);
 
   const handleSubmit = async () => {
     if (totalTickets === 0 && bookingType !== 'privat') return toast.error("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
@@ -562,6 +577,7 @@ export function BookingFlow() {
                  selectedSeats={selectedSeats}
                  onSeatSelect={setSelectedSeats}
                  categoryAllocations={categoryAllocations}
+                 baseCategoryColors={baseCategoryColors}
                />
             </div>
           )}

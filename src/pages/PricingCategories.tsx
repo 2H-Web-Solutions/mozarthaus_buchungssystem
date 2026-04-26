@@ -38,6 +38,66 @@ export function PricingCategories() {
     }
   };
 
+  const mainCategories = categories.filter(c => !c.type || c.type === 'main');
+  const variantCategories = categories.filter(c => c.type === 'variant');
+
+  const renderTable = (cats: TicketCategory[], emptyMessage: string) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+            <th className="p-4 font-bold">Farbe</th>
+            <th className="p-4 font-bold">ID / Alias</th>
+            <th className="p-4 font-bold">Name</th>
+            <th className="p-4 font-bold">Preis</th>
+            <th className="p-4 font-bold">Verknüpfung</th>
+            <th className="p-4 font-bold text-center">Aktiv</th>
+            <th className="p-4 font-bold text-right">Aktionen</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {cats.map((cat) => (
+            <tr key={cat.id} className="hover:bg-gray-50/50">
+              <td className="p-4">
+                <div className="w-6 h-6 rounded border border-gray-200 shadow-sm" style={{ backgroundColor: cat.colorCode }}></div>
+              </td>
+              <td className="p-4 font-mono text-sm text-gray-600">{cat.id}</td>
+              <td className="p-4 font-medium text-gray-900">{cat.name}</td>
+              <td className="p-4 font-bold text-gray-900">€{cat.price.toFixed(2)}</td>
+              <td className="p-4 text-sm text-gray-500">
+                {cat.type === 'variant' && cat.parentId ? (
+                  <span className="flex items-center gap-1">
+                    ↳ {categories.find(c => c.id === cat.parentId)?.name || cat.parentId}
+                  </span>
+                ) : (
+                  <span className="text-gray-300">-</span>
+                )}
+              </td>
+              <td className="p-4 text-center">
+                {cat.isActive ? <Check className="w-5 h-5 text-green-500 mx-auto" /> : <X className="w-5 h-5 text-gray-400 mx-auto" />}
+              </td>
+              <td className="p-4 text-right">
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => openEditModal(cat)} className="p-2 text-gray-400 hover:text-brand-primary transition">
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleDelete(cat.id)} className="p-2 text-gray-400 hover:text-red-500 transition">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {cats.length === 0 && (
+            <tr>
+              <td colSpan={7} className="p-8 text-center text-gray-500">{emptyMessage}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto pb-12">
       <div className="flex justify-between items-center mb-8">
@@ -54,54 +114,16 @@ export function PricingCategories() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-              <th className="p-4 font-bold">Farbe</th>
-              <th className="p-4 font-bold">ID / Alias</th>
-              <th className="p-4 font-bold">Name</th>
-              <th className="p-4 font-bold">Preis</th>
-              <th className="p-4 font-bold text-center">Aktiv</th>
-              <th className="p-4 font-bold text-right">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {categories.map((cat) => (
-              <tr key={cat.id} className="hover:bg-gray-50/50">
-                <td className="p-4">
-                  <div className="w-6 h-6 rounded border border-gray-200 shadow-sm" style={{ backgroundColor: cat.colorCode }}></div>
-                </td>
-                <td className="p-4 font-mono text-sm text-gray-600">{cat.id}</td>
-                <td className="p-4 font-medium text-gray-900">{cat.name}</td>
-                <td className="p-4 font-bold text-gray-900">€{cat.price.toFixed(2)}</td>
-                <td className="p-4 text-center">
-                  {cat.isActive ? <Check className="w-5 h-5 text-green-500 mx-auto" /> : <X className="w-5 h-5 text-gray-400 mx-auto" />}
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => openEditModal(cat)} className="p-2 text-gray-400 hover:text-brand-primary transition">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(cat.id)} className="p-2 text-gray-400 hover:text-red-500 transition">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {categories.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-500">Keine Kategorien angelegt. Bitte erstelle die Standard-Kategorien.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <h2 className="text-xl font-bold text-gray-900 mb-4">Hauptkategorien (Regiondo)</h2>
+      {renderTable(mainCategories, 'Keine Hauptkategorien angelegt.')}
+
+      <h2 className="text-xl font-bold text-gray-900 mb-4 mt-8">Preisvarianten / Partner-Tarife</h2>
+      {renderTable(variantCategories, 'Keine Varianten angelegt.')}
 
       {isModalOpen && (
         <CategoryModal
           category={editingCat}
+          categories={categories}
           onClose={() => setIsModalOpen(false)}
         />
       )}
@@ -109,7 +131,7 @@ export function PricingCategories() {
   );
 }
 
-function CategoryModal({ category, onClose }: { category: TicketCategory | null, onClose: () => void }) {
+function CategoryModal({ category, categories, onClose }: { category: TicketCategory | null, categories: TicketCategory[], onClose: () => void }) {
   const [formData, setFormData] = useState<Partial<TicketCategory>>(
     category || {
       id: '',
@@ -117,7 +139,9 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
       price: 0,
       colorCode: '#c02a2a',
       isActive: true,
-      description: ''
+      description: '',
+      type: 'main',
+      parentId: ''
     }
   );
 
@@ -125,6 +149,10 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
     e.preventDefault();
     if (!formData.id || !formData.name || formData.price === undefined) {
       toast.error('Bitte ID, Name und Preis angeben.');
+      return;
+    }
+    if (formData.type === 'variant' && !formData.parentId) {
+      toast.error('Bitte eine Hauptkategorie für die Variante auswählen.');
       return;
     }
 
@@ -173,13 +201,42 @@ function CategoryModal({ category, onClose }: { category: TicketCategory | null,
             </div>
 
             <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">Typ</label>
+              <select
+                value={formData.type || 'main'}
+                onChange={e => setFormData({ ...formData, type: e.target.value as 'main' | 'variant', parentId: e.target.value === 'main' ? null : formData.parentId })}
+                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
+              >
+                <option value="main">Hauptkategorie (Regiondo)</option>
+                <option value="variant">Preisvariante / Rabatt</option>
+              </select>
+            </div>
+
+            {formData.type === 'variant' && (
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Verknüpfte Hauptkategorie <span className="text-red-500">*</span></label>
+                <select
+                  value={formData.parentId || ''}
+                  onChange={e => setFormData({ ...formData, parentId: e.target.value })}
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
+                  required
+                >
+                  <option value="">-- Bitte wählen --</option>
+                  {categories.filter(c => !c.type || c.type === 'main').map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Anzeigename</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
                 required
-                placeholder="z.B. Kategorie A"
+                placeholder={formData.type === 'variant' ? "z.B. Student, Rollstuhl" : "z.B. Kategorie A"}
                 className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
               />
             </div>

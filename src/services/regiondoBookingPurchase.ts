@@ -12,7 +12,7 @@ export async function purchaseWithRegiondo(params: {
   dateYmd: string;
   time: string;
   categories: { name: string, quantity: number, regiondoOptionId?: string }[];
-  customerData: { name: string, email: string, phone: string };
+  customerData: { name: string, email: string, phone: string, comment?: string };
 }) {
   const { productId, dateYmd, time, categories, customerData } = params;
   
@@ -52,7 +52,8 @@ export async function purchaseWithRegiondo(params: {
       firstname,
       lastname,
       email: customerData.email,
-      telephone: customerData.phone
+      telephone: customerData.phone,
+      comment: customerData.comment
     }
   };
 

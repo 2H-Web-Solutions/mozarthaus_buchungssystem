@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, doc, query, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, getCountFromServer, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, getCountFromServer, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Event } from '../types/schema';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdmin } from '../hooks/useAdmin';
+import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
+import { Trash2 } from 'lucide-react';
 
 function EventOccupancy({ eventId }: { eventId: string }) {
   const [data, setData] = useState({
@@ -65,8 +68,27 @@ export function Events() {
 
   const navigate = useNavigate();
   const { appUser } = useAuth();
+  const { isAdmin } = useAdmin();
   const role = appUser?.role || 'admin';
   const isMusiker = role === 'musiker';
+
+  const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteEvent = async () => {
+    if (!eventToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, `apps/${APP_ID}/events`, eventToDelete.id));
+      setEventToDelete(null);
+      fetchEvents('initial');
+    } catch(err) {
+      console.error(err);
+      setError("Fehler beim Löschen des Events.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchTotalCount = async () => {
     try {
@@ -339,13 +361,22 @@ export function Events() {
                    <td className="p-4">
                      <EventOccupancy eventId={evt.id} />
                    </td>
-                   <td className="p-4 pr-6 text-right">
+                   <td className="p-4 pr-6 text-right flex items-center justify-end gap-2">
                      <button 
                        onClick={(e) => { e.stopPropagation(); navigate(`/events/${evt.id}/belegungsplan`); }}
                        className="px-4 py-2 bg-white hover:bg-brand-primary hover:text-white text-brand-primary rounded-xl transition-all border border-brand-primary/20 font-bold text-xs shadow-sm shadow-brand-primary/5"
                      >
                        Belegungsplan
                      </button>
+                     {isAdmin && (
+                       <button 
+                         onClick={(e) => { e.stopPropagation(); setEventToDelete(evt); }}
+                         className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                         title="Event löschen"
+                       >
+                         <Trash2 className="w-5 h-5" />
+                       </button>
+                     )}
                    </td>
                  </tr>
                ))}
@@ -385,6 +416,15 @@ export function Events() {
           </nav>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        isOpen={!!eventToDelete}
+        onClose={() => setEventToDelete(null)}
+        onConfirm={handleDeleteEvent}
+        title="Event endgültig löschen"
+        message={`Möchten Sie das Event '${eventToDelete?.title || 'Ohne Titel'}' wirklich löschen?`}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -24,8 +24,8 @@ export interface Event {
   ensemble?: EventEnsembleMember[];
   totalCapacity?: number;
   regiondoId?: string; // Restore for mapping and display
-  seating?: Record<string, { 
-    bookingId: string | null, 
+  seating?: Record<string, {
+    bookingId: string | null,
     category: 'A' | 'B' | 'STUDENT',
     row: string,
     number: number
@@ -68,7 +68,7 @@ export interface Booking {
   categoryName?: string; // Lesbarer Name der Option/Kategorie
   eventTitle?: string;
   totalAmount: number;
-  
+
   // Neue Felder für Buchungsvarianten
   bookingType?: 'einzel' | 'gruppe' | 'privat';
   sellerReference?: string;
@@ -76,7 +76,7 @@ export interface Booking {
   groupPersons?: number;
   customTotalPrice?: number;
   receiptUrl?: string; // Link zum externen Beleg
-  
+
   // Source-specific payload containing raw data from Regiondo or other providers
   lastPayload?: Record<string, any>;
   isCheckedIn?: boolean;
@@ -102,7 +102,7 @@ export interface Partner {
   telefon?: string;
   steuernummer?: string;
   aktiv?: boolean;
-  
+
   // Custom billing/contact fields added from Partners page
   bezahloption?: string;
   bezahlinformation?: string;
@@ -112,9 +112,11 @@ export interface Partner {
 export interface TicketCategory {
   id: string; // e.g., 'cat_a', 'cat_b', 'student'
   name: string; // e.g., 'Kategorie A'
-  price: number; 
+  price: number;
   colorCode: string; // Hex color
   isActive: boolean;
   regiondoOptionId?: string; // Add for mapping
   description?: string;
+  type?: 'main' | 'variant';
+  parentId?: string | null;
 }

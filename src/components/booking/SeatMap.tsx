@@ -20,9 +20,10 @@ interface SeatMapProps {
   selectedSeats: string[];
   onSeatSelect: (seatIds: string[]) => void;
   categoryAllocations: CategoryAllocation[];
+  baseCategoryColors?: Record<string, string>;
 }
 
-export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, categoryAllocations }: SeatMapProps) {
+export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, categoryAllocations, baseCategoryColors = {} }: SeatMapProps) {
   const [seats, setSeats] = useState<Record<string, Seat>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -147,23 +148,23 @@ export function SeatMap({ eventId, requiredSeats, selectedSeats, onSeatSelect, c
                     // Strict UI Twin-Toggling logic
                     let btnClass = "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ";
                     
-                    let btnStyle = {};
+                    let btnStyle: React.CSSProperties = {};
                     
                     if (isSelected) {
                       btnStyle = getSeatColorStyle(s.id);
-                      btnClass += `text-white shadow-lg transform scale-110`;
+                      btnClass += `text-white shadow-lg transform scale-110 border-transparent`;
                     } else if (isAvailable) {
                       // Show category border/bg for unoccupied seats
                       const category = SEATING_PLAN_TEMPLATE.find(r => r.rowId === rowConfig.rowId)
                         ?.elements.find(e => e.type === 'seat' && e.id === s.id) as any;
                       const cat = category?.category || 'B';
+                      const seatColor = baseCategoryColors[cat] || (cat === 'A' ? '#D4AF37' : cat === 'B' ? '#1E3A8A' : '#10B981');
                       
-                      let catClass = "border-gray-300 bg-white hover:border-brand-primary";
-                      if (cat === 'A') catClass = "border-[#D4AF37] bg-white hover:bg-[#D4AF37]/5";
-                      else if (cat === 'B') catClass = "border-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5";
-                      else if (cat === 'STUDENT') catClass = "border-[#10B981] bg-white hover:bg-[#10B981]/5";
-
-                      btnClass += `${catClass} border-2 text-gray-700 hover:text-brand-primary cursor-pointer active:scale-95`;
+                      btnClass += ` border-2 bg-white cursor-pointer active:scale-95 hover:opacity-80`;
+                      btnStyle = {
+                        borderColor: seatColor,
+                        color: seatColor
+                      };
                     } else {
                       btnClass += "bg-gray-200 border border-gray-300 text-gray-400 cursor-not-allowed opacity-50";
                     }

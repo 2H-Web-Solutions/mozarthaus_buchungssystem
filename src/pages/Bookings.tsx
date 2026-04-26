@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
+import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Booking, TicketCategory } from '../types/schema';
-import { Search, ExternalLink } from 'lucide-react';
+import { Search, ExternalLink, Trash2 } from 'lucide-react';
+import { useAdmin } from '../hooks/useAdmin';
+import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
 import { getBookingDisplayData } from '../utils/bookingMapper';
 import { listenTicketCategories } from '../services/firebase/pricingService';
 
@@ -36,6 +39,23 @@ export function Bookings() {
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  const { isAdmin } = useAdmin();
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!bookingToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, `apps/${APP_ID}/bookings`, bookingToDelete.id));
+      setBookingToDelete(null);
+    } catch(err) {
+      console.error("Delete Error", err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     // 1. Listen for categories for mapping
@@ -178,11 +198,20 @@ export function Bookings() {
                     <td className="px-6 py-5 text-right font-black text-slate-900">
                       € {display.totalAmount.toFixed(2)}
                     </td>
-                    <td className="px-6 py-5 text-center">
+                    <td className="px-6 py-5 text-center flex items-center justify-end gap-2">
                        {b.receiptUrl && (
                           <a href={b.receiptUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-300 hover:text-blue-500 transition-colors" title="Beleg öffnen">
                             <ExternalLink className="w-4 h-4" />
                           </a>
+                        )}
+                        {isAdmin && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
+                            className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                            title="Buchung löschen"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         )}
                     </td>
                   </tr>
@@ -192,6 +221,14 @@ export function Bookings() {
           </table>
         </div>
       </div>
+      <ConfirmDeleteModal
+        isOpen={!!bookingToDelete}
+        onClose={() => setBookingToDelete(null)}
+        onConfirm={handleDelete}
+        title="Buchung endgültig löschen"
+        message={`Möchten Sie diese Buchung (${bookingToDelete?.id}) wirklich unwiderruflich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
