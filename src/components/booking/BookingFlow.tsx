@@ -8,6 +8,7 @@ import { listenTicketCategories } from '../../services/firebase/pricingService';
 import { createPrivateReservation } from '../../services/privateReservationService';
 import { purchaseWithRegiondo } from '../../services/regiondoBookingPurchase';
 import { CalendarDays, Ticket, Building2, ChevronRight, CheckCircle2, User, UsersRound } from 'lucide-react';
+import { SeatMap } from './SeatMap';
 import toast from 'react-hot-toast';
 
 export function BookingFlow() {
@@ -44,6 +45,9 @@ export function BookingFlow() {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  
+  // Section 4
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchPartnersData = async () => {
@@ -107,7 +111,52 @@ export function BookingFlow() {
     console.log(`[BookingFlow] Calculation updated: Type=${bookingType}, TotalPrice=${totalPrice}, TotalTickets=${totalTickets}`);
   }, [totalPrice, totalTickets, bookingType]);
 
+  // Reset seats when event changes or tickets decrease
+  useEffect(() => {
+    setSelectedSeats([]);
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (selectedSeats.length > totalTickets) {
+      setSelectedSeats(prev => prev.slice(0, totalTickets));
+    }
+  }, [totalTickets, selectedSeats.length]);
+
+  const categoryAllocations = useMemo(() => {
+    const allocs: { id: string; name: string; quantity: number; colorCode: string }[] = [];
+    if (bookingType === 'einzel') {
+      let index = 0;
+      const colors = ['#D4AF37', '#1E3A8A', '#10B981', '#a855f7', '#ec4899', '#f97316'];
+      categories.forEach(c => {
+        const q = quantities[c.id] || 0;
+        if (q > 0) {
+          allocs.push({
+            id: c.id,
+            name: c.name,
+            quantity: q,
+            colorCode: colors[index % colors.length]
+          });
+          index++;
+        }
+      });
+    } else if (bookingType === 'double') {
+      const cat = categories.find(c => c.id === doubleCategoryId);
+      if (cat && Number(doubleTickets) > 0) {
+        allocs.push({
+          id: cat.id,
+          name: cat.name,
+          quantity: Number(doubleTickets),
+          colorCode: '#D4AF37'
+        });
+      }
+    }
+    return allocs;
+  }, [bookingType, categories, quantities, doubleCategoryId, doubleTickets]);
+
   const handleSubmit = async () => {
+    if (totalTickets === 0 && bookingType !== 'privat') return toast.error("Bitte wähle mindestens ein Ticket aus der Kategorie aus.");
+    if (bookingType !== 'privat' && selectedSeats.length !== totalTickets) return toast.error(`Bitte weise genau ${totalTickets} Sitzplätze im physischen Saalplan zu.`);
+    
     const missing: string[] = [];
 
     if (bookingType === 'einzel') {
@@ -170,19 +219,31 @@ export function BookingFlow() {
         const cat = categories.find(c => c.id === doubleCategoryId);
         if (!cat) throw new Error("Kategorie nicht gefunden.");
 
+        const isVariant = cat.type === 'variant';
+        const mainCat = isVariant ? categories.find(m => m.id === cat.parentId) : cat;
+
+        const ticketData = [{
+          categoryId: cat.id,
+          categoryName: cat.name,
+          quantity: Number(doubleTickets),
+          price: Number(doublePrice) / (Number(doubleTickets) || 1),
+          parentId: cat.parentId || null
+        }];
+
         await purchaseWithRegiondo({
           productId: '23941',
           dateYmd,
           time: selectedEvent?.time || '15:00',
           categories: [{
-            name: cat.name,
+            name: mainCat?.name || cat.name,
             quantity: Number(doubleTickets),
-            regiondoOptionId: cat.regiondoOptionId
+            regiondoOptionId: mainCat?.regiondoOptionId || cat.regiondoOptionId
           }],
           customerData: {
             name: customerName || contactPerson || 'Gruppenbuchung',
             email: customerEmail,
-            phone: customerPhone
+            phone: customerPhone,
+            comment: JSON.stringify({ tickets: ticketData, seatIds: selectedSeats })
           }
         });
 
@@ -201,10 +262,24 @@ export function BookingFlow() {
         // Einzelbuchung
         const regiondoCats = categories
           .filter(c => (quantities[c.id] || 0) > 0)
+          .map(c => {
+             const isVariant = c.type === 'variant';
+             const mainCat = isVariant ? categories.find(m => m.id === c.parentId) : c;
+             return {
+               name: mainCat?.name || c.name,
+               quantity: quantities[c.id],
+               regiondoOptionId: mainCat?.regiondoOptionId || c.regiondoOptionId
+             };
+          });
+
+        const ticketData = categories
+          .filter(c => (quantities[c.id] || 0) > 0)
           .map(c => ({
-            name: c.name,
-            quantity: quantities[c.id],
-            regiondoOptionId: c.regiondoOptionId
+             categoryId: c.id,
+             categoryName: c.name,
+             quantity: quantities[c.id],
+             price: c.price,
+             parentId: c.parentId || null
           }));
 
         await purchaseWithRegiondo({
@@ -215,7 +290,8 @@ export function BookingFlow() {
           customerData: {
             name: customerName,
             email: customerEmail,
-            phone: customerPhone
+            phone: customerPhone,
+            comment: JSON.stringify({ tickets: ticketData, seatIds: selectedSeats })
           }
         });
       }
@@ -380,19 +456,35 @@ export function BookingFlow() {
             <Ticket className="w-5 h-5 text-emerald-500"/> 3. Tickets
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            {categories.map(cat => (
-              <div key={cat.id} className="p-6 border border-gray-200 rounded-2xl bg-gray-50 flex flex-col items-center shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: cat.colorCode }}></div>
-                <div className="w-4 h-4 rounded-full mb-2 shadow-sm" style={{ backgroundColor: cat.colorCode }}></div>
-                <span className="block text-xl font-bold mb-1">{cat.name}</span>
-                <span className="block text-sm text-gray-500 mb-4">{cat.price.toFixed(2)} €</span>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setQuantities(p => ({...p, [cat.id]: Math.max(0, (p[cat.id]||0)-1)}))} className="w-10 h-10 border rounded-full">-</button>
-                  <span className="text-2xl font-bold">{quantities[cat.id] || 0}</span>
-                  <button onClick={() => setQuantities(p => ({...p, [cat.id]: (p[cat.id]||0)+1}))} className="w-10 h-10 border rounded-full">+</button>
+            {categories.filter(cat => !cat.type || cat.type === 'main').map(mainCat => {
+              const variants = categories.filter(v => v.type === 'variant' && v.parentId === mainCat.id);
+              const allOptions = [mainCat, ...variants];
+              
+              return (
+                <div key={mainCat.id} className="p-0 border border-gray-200 rounded-2xl bg-white flex flex-col shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: mainCat.colorCode }}></div>
+                  <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: mainCat.colorCode }}></div>
+                    <span className="text-lg font-bold">{mainCat.name}</span>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {allOptions.map(option => (
+                      <div key={option.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-gray-900">{option.id === mainCat.id ? 'Standard' : option.name}</span>
+                          <span className="text-xs text-gray-500">{option.price.toFixed(2)} €</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setQuantities(p => ({...p, [option.id]: Math.max(0, (p[option.id]||0)-1)}))} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors">-</button>
+                          <span className="text-base font-bold w-4 text-center">{quantities[option.id] || 0}</span>
+                          <button onClick={() => setQuantities(p => ({...p, [option.id]: (p[option.id]||0)+1}))} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors">+</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -404,12 +496,12 @@ export function BookingFlow() {
             <Ticket className="w-5 h-5 text-orange-500"/> 3. Gruppenbuchung Details
           </h2>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              {categories.filter(c => c.name.toLowerCase().includes('kategorie')).map(cat => (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {categories.filter(cat => !cat.type || cat.type === 'main').map(cat => (
                 <label key={cat.id} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === cat.id ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
                   <input type="radio" value={cat.id} className="hidden" onChange={() => setDoubleCategoryId(cat.id)} />
                   <div className="w-3 h-3 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: cat.colorCode }}></div>
-                  <span className="text-base font-bold">{cat.name}</span>
+                  <span className="text-base font-bold text-center">{cat.name}</span>
                 </label>
               ))}
             </div>
@@ -443,6 +535,36 @@ export function BookingFlow() {
               <input type="number" placeholder="Gesamtpreis" value={customTotalPrice} onChange={e => setCustomTotalPrice(e.target.value ? Number(e.target.value) : '')} className="p-2.5 border border-gray-300 rounded-lg text-lg font-bold w-full outline-none" />
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Sektion 4: Saalplan */}
+      {(bookingType === 'einzel' || bookingType === 'double') && (
+        <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-purple-500 shadow-[0_0_10px_#a855f7]"></div>
+          <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-2">
+            <Ticket className="w-6 h-6 text-purple-500"/> 4. Saalplan-Zuweisung ({selectedSeats.length} / {totalTickets} zugewiesen)
+          </h2>
+          
+          {totalTickets === 0 ? (
+            <div className="p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xl font-medium">
+               👆 Bitte definieren Sie zuerst die Ticket-Anzahl, um die Plätze physisch zuzuweisen.
+            </div>
+          ) : !selectedEventId ? (
+            <div className="p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xl font-medium">
+               👆 Bitte wählen Sie zuerst ein Konzert, um den tagesaktuellen Saalplan zu laden.
+            </div>
+          ) : (
+            <div className="overflow-hidden">
+               <SeatMap 
+                 eventId={selectedEventId}
+                 requiredSeats={totalTickets}
+                 selectedSeats={selectedSeats}
+                 onSeatSelect={setSelectedSeats}
+                 categoryAllocations={categoryAllocations}
+               />
+            </div>
+          )}
         </section>
       )}
 
