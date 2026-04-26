@@ -254,8 +254,12 @@ function CategoryModal({ category, categories, onClose }: { category: TicketCate
                     className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                   />
                   <datalist id="tariff-groups">
-                    {Array.from(new Set(categories.map(c => c.tariffGroup).filter(Boolean))).map(group => (
-                      <option key={group as string} value={group as string} />
+                    {Array.from(new Set(
+                       categories
+                         .filter(c => c.type === 'variant' && c.tariffGroup && c.tariffGroup.trim() !== '')
+                         .map(c => c.tariffGroup!.trim())
+                     )).map(group => (
+                      <option key={group} value={group} />
                     ))}
                   </datalist>
                   <p className="text-xs text-gray-500 mt-1">

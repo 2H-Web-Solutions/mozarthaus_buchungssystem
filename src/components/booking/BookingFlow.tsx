@@ -444,8 +444,12 @@ export function BookingFlow() {
                      className="w-full p-2 border border-gray-300 rounded-md outline-none bg-white"
                    >
                      <option value="">Standard (Kein Rabatt)</option>
-                     {Array.from(new Set(categories.map(c => c.tariffGroup).filter(Boolean))).map(group => (
-                       <option key={group as string} value={group as string}>{group}</option>
+                     {Array.from(new Set(
+                       categories
+                         .filter(c => c.type === 'variant' && c.tariffGroup && c.tariffGroup.trim() !== '')
+                         .map(c => c.tariffGroup!.trim())
+                     )).map(group => (
+                       <option key={group} value={group}>{group}</option>
                      ))}
                    </select>
                  </div>
