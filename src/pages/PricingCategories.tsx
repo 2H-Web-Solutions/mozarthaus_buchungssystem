@@ -118,7 +118,20 @@ export function PricingCategories() {
       {renderTable(mainCategories, 'Keine Hauptkategorien angelegt.')}
 
       <h2 className="text-xl font-bold text-gray-900 mb-4 mt-8">Preisvarianten / Partner-Tarife</h2>
-      {renderTable(variantCategories, 'Keine Varianten angelegt.')}
+      {(() => {
+        const tariffGroups = Array.from(new Set(variantCategories.map(c => c.tariffGroup || 'Ohne Tarifgruppe')));
+        if (tariffGroups.length === 0) return renderTable([], 'Keine Varianten angelegt.');
+        
+        return tariffGroups.map(group => {
+          const groupCats = variantCategories.filter(c => (c.tariffGroup || 'Ohne Tarifgruppe') === group);
+          return (
+            <div key={group}>
+              <h3 className="text-lg font-bold text-gray-700 mb-2 px-1">Tarifgruppe: {group}</h3>
+              {renderTable(groupCats, 'Keine Varianten in dieser Gruppe.')}
+            </div>
+          );
+        });
+      })()}
 
       {isModalOpen && (
         <CategoryModal
@@ -141,7 +154,8 @@ function CategoryModal({ category, categories, onClose }: { category: TicketCate
       isActive: true,
       description: '',
       type: 'main',
-      parentId: ''
+      parentId: '',
+      tariffGroup: ''
     }
   );
 
@@ -213,19 +227,41 @@ function CategoryModal({ category, categories, onClose }: { category: TicketCate
             </div>
 
             {formData.type === 'variant' && (
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Verknüpfte Hauptkategorie <span className="text-red-500">*</span></label>
-                <select
-                  value={formData.parentId || ''}
-                  onChange={e => setFormData({ ...formData, parentId: e.target.value })}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
-                  required
-                >
-                  <option value="">-- Bitte wählen --</option>
-                  {categories.filter(c => !c.type || c.type === 'main').map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
-                  ))}
-                </select>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Verknüpfte Hauptkategorie <span className="text-red-500">*</span></label>
+                  <select
+                    value={formData.parentId || ''}
+                    onChange={e => setFormData({ ...formData, parentId: e.target.value })}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
+                    required
+                  >
+                    <option value="">-- Bitte wählen --</option>
+                    {categories.filter(c => !c.type || c.type === 'main').map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Tarifgruppe / Rabatt-Name (Optional)</label>
+                  <input
+                    type="text"
+                    list="tariff-groups"
+                    value={formData.tariffGroup || ''}
+                    onChange={e => setFormData({ ...formData, tariffGroup: e.target.value })}
+                    placeholder="z.B. Vienna Card, Hotel"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
+                  />
+                  <datalist id="tariff-groups">
+                    {Array.from(new Set(categories.map(c => c.tariffGroup).filter(Boolean))).map(group => (
+                      <option key={group as string} value={group as string} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Varianten mit gleicher Tarifgruppe werden im Booking-Wizard in einem Dropdown gebündelt.
+                  </p>
+                </div>
               </div>
             )}
 

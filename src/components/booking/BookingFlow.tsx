@@ -20,6 +20,7 @@ export function BookingFlow() {
   // Section 2
   const [partners, setPartners] = useState<{id: string, name: string, type: string}[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
+  const [selectedTariffGroup, setSelectedTariffGroup] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -83,6 +84,12 @@ export function BookingFlow() {
       unsubEvents();
     };
   }, []);
+
+  useEffect(() => {
+    setQuantities({});
+    setDoubleCategoryId('');
+    setSelectedSeats([]);
+  }, [selectedTariffGroup]);
 
   // Derived state for the checkout bar with explicit dependency tracking
   const { totalPrice, totalTickets } = useMemo(() => {
@@ -414,17 +421,36 @@ export function BookingFlow() {
         
         <div className="space-y-4">
            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-             <label className="block text-sm font-medium text-gray-700 mb-1">B2B Partner (Optional)</label>
-             <select
-               value={selectedPartnerId}
-               onChange={e => setSelectedPartnerId(e.target.value)}
-               className="w-full p-2 border border-gray-300 rounded-md outline-none"
-             >
-               <option value="">-- Kein Partner --</option>
-               {partners.map(partner => (
-                 <option key={partner.id} value={partner.id}>{partner.name}</option>
-               ))}
-             </select>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">B2B Partner (Optional)</label>
+                 <select
+                   value={selectedPartnerId}
+                   onChange={e => setSelectedPartnerId(e.target.value)}
+                   className="w-full p-2 border border-gray-300 rounded-md outline-none bg-white"
+                 >
+                   <option value="">-- Kein Partner --</option>
+                   {partners.map(partner => (
+                     <option key={partner.id} value={partner.id}>{partner.name}</option>
+                   ))}
+                 </select>
+               </div>
+               {bookingType !== 'privat' && (
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Tarif / Rabattaktion</label>
+                   <select
+                     value={selectedTariffGroup || ''}
+                     onChange={e => setSelectedTariffGroup(e.target.value || null)}
+                     className="w-full p-2 border border-gray-300 rounded-md outline-none bg-white"
+                   >
+                     <option value="">Standard (Kein Rabatt)</option>
+                     {Array.from(new Set(categories.map(c => c.tariffGroup).filter(Boolean))).map(group => (
+                       <option key={group as string} value={group as string}>{group}</option>
+                     ))}
+                   </select>
+                 </div>
+               )}
+             </div>
            </div>
 
            {bookingType === 'double' && (
@@ -472,30 +498,38 @@ export function BookingFlow() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {categories.filter(cat => !cat.type || cat.type === 'main').map(mainCat => {
-              const variants = categories.filter(v => v.type === 'variant' && v.parentId === mainCat.id);
-              const allOptions = [mainCat, ...variants];
+              const effectiveOption = selectedTariffGroup 
+                ? categories.find(c => c.type === 'variant' && c.parentId === mainCat.id && c.tariffGroup === selectedTariffGroup)
+                : mainCat;
               
+              const isAvailable = !!effectiveOption;
+              const optionId = isAvailable ? effectiveOption.id : mainCat.id;
+
               return (
-                <div key={mainCat.id} className="p-0 border border-gray-200 rounded-2xl bg-white flex flex-col shadow-sm relative overflow-hidden">
+                <div key={mainCat.id} className={`p-0 border border-gray-200 rounded-2xl bg-white flex flex-col shadow-sm relative overflow-hidden ${!isAvailable ? 'opacity-50' : ''}`}>
                   <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: mainCat.colorCode }}></div>
                   <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
                     <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: mainCat.colorCode }}></div>
                     <span className="text-lg font-bold">{mainCat.name}</span>
                   </div>
-                  <div className="p-3 space-y-3">
-                    {allOptions.map(option => (
-                      <div key={option.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                  <div className="p-4 flex items-center justify-between">
+                    {isAvailable ? (
+                      <>
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900">{option.id === mainCat.id ? 'Standard' : option.name}</span>
-                          <span className="text-xs text-gray-500">{option.price.toFixed(2)} €</span>
+                          <span className="text-lg font-bold text-gray-900">{effectiveOption.price.toFixed(2)} €</span>
+                          <span className="text-xs text-gray-500">{selectedTariffGroup ? `Tarif: ${selectedTariffGroup}` : 'Standard Tarif'}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button onClick={() => setQuantities(p => ({...p, [option.id]: Math.max(0, (p[option.id]||0)-1)}))} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors">-</button>
-                          <span className="text-base font-bold w-4 text-center">{quantities[option.id] || 0}</span>
-                          <button onClick={() => setQuantities(p => ({...p, [option.id]: (p[option.id]||0)+1}))} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors">+</button>
+                          <button onClick={() => setQuantities(p => ({...p, [optionId]: Math.max(0, (p[optionId]||0)-1)}))} className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors shadow-sm">-</button>
+                          <span className="text-xl font-bold w-6 text-center">{quantities[optionId] || 0}</span>
+                          <button onClick={() => setQuantities(p => ({...p, [optionId]: (p[optionId]||0)+1}))} className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-full bg-white text-gray-600 hover:bg-gray-100 transition-colors shadow-sm">+</button>
                         </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-gray-500 py-2">
+                        Nicht verfügbar im gewählten Tarif
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               );
@@ -512,13 +546,25 @@ export function BookingFlow() {
           </h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {categories.filter(cat => !cat.type || cat.type === 'main').map(cat => (
-                <label key={cat.id} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === cat.id ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
-                  <input type="radio" value={cat.id} className="hidden" onChange={() => setDoubleCategoryId(cat.id)} />
-                  <div className="w-3 h-3 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: cat.colorCode }}></div>
-                  <span className="text-base font-bold text-center">{cat.name}</span>
-                </label>
-              ))}
+              {categories.filter(cat => !cat.type || cat.type === 'main').map(mainCat => {
+                const effectiveOption = selectedTariffGroup 
+                  ? categories.find(c => c.type === 'variant' && c.parentId === mainCat.id && c.tariffGroup === selectedTariffGroup)
+                  : mainCat;
+                
+                const isAvailable = !!effectiveOption;
+                const optionId = isAvailable ? effectiveOption.id : mainCat.id;
+
+                if (!isAvailable) return null;
+
+                return (
+                  <label key={mainCat.id} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${doubleCategoryId === optionId ? 'border-orange-500 bg-orange-50' : 'bg-white'}`}>
+                    <input type="radio" value={optionId} className="hidden" onChange={() => setDoubleCategoryId(optionId)} />
+                    <div className="w-3 h-3 rounded-full shadow-sm border border-gray-100" style={{ backgroundColor: mainCat.colorCode }}></div>
+                    <span className="text-base font-bold text-center">{mainCat.name}</span>
+                    {selectedTariffGroup && <span className="text-xs text-gray-500 text-center">{effectiveOption.price.toFixed(2)} €</span>}
+                  </label>
+                );
+              })}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>

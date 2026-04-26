@@ -119,4 +119,5 @@ export interface TicketCategory {
   description?: string;
   type?: 'main' | 'variant';
   parentId?: string | null;
+  tariffGroup?: string; // e.g. "Vienna Card", "Hotel"
 }
