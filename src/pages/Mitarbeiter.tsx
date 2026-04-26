@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { createMusiker, deleteMusiker, updateMusiker, type Musiker as MusikerType } from '../services/firebase/musikerService';
@@ -25,6 +25,8 @@ export function Mitarbeiter() {
   const [enableDigitalRole, setEnableDigitalRole] = useState(false);
   const [digitalEmail, setDigitalEmail] = useState('');
   const [digitalPassword, setDigitalPassword] = useState('');
+  const [hasDigitalRole, setHasDigitalRole] = useState(false);
+  const [existingDigitalEmail, setExistingDigitalEmail] = useState('');
 
   // Form State
   const [art, setArt] = useState('Mitarbeiter');
@@ -72,6 +74,8 @@ export function Mitarbeiter() {
     setEnableDigitalRole(false);
     setDigitalEmail('');
     setDigitalPassword('');
+    setHasDigitalRole(false);
+    setExistingDigitalEmail('');
   };
 
   const openNewModal = () => {
@@ -95,7 +99,25 @@ export function Mitarbeiter() {
     setEnableDigitalRole(false);
     setDigitalEmail('');
     setDigitalPassword('');
+    setHasDigitalRole(false);
+    setExistingDigitalEmail('');
     setIsModalOpen(true);
+
+    // Prüfen, ob bereits eine digitale Rolle existiert
+    const checkDigitalRole = async () => {
+        try {
+            const qUser = query(collection(db, `apps/${APP_ID}/users`), where('linkedRecordId', '==', m.id));
+            const snap = await getDocs(qUser);
+            if (!snap.empty) {
+                const userData = snap.docs[0].data();
+                setHasDigitalRole(true);
+                setExistingDigitalEmail(userData.email);
+            }
+        } catch (e) {
+            console.error("Fehler beim Prüfen der digitalen Rolle:", e);
+        }
+    };
+    checkDigitalRole();
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -121,12 +143,16 @@ export function Mitarbeiter() {
         active: true
       });
 
-      if (enableDigitalRole && digitalEmail && digitalPassword) {
+      if (enableDigitalRole && digitalEmail && digitalPassword && !hasDigitalRole) {
         try {
           await createDigitalRole(digitalEmail, digitalPassword, 'mitarbeiter', id);
           toast.success('Digitale Rolle erfolgreich angelegt!');
         } catch (err: any) {
-          toast.error(err.message || 'Fehler beim Anlegen der digitalen Rolle');
+          if (err.code === 'auth/email-already-in-use' || (err.message && err.message.includes('email-already-in-use'))) {
+              toast.error('Diese E-Mail-Adresse wird bereits für einen Account verwendet.');
+          } else {
+              toast.error(err.message || 'Fehler beim Anlegen der digitalen Rolle');
+          }
         }
       }
 
@@ -370,46 +396,55 @@ export function Mitarbeiter() {
 
                {role === 'admin' && (
                  <div className="col-span-1 md:col-span-2 mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
-                   <div className="flex items-center gap-2 mb-4">
-                     <input 
-                       type="checkbox" 
-                       id="digitalRole"
-                       checked={enableDigitalRole}
-                       onChange={e => setEnableDigitalRole(e.target.checked)}
-                       className="w-4 h-4 text-brand-primary rounded border-gray-300 focus:ring-brand-primary"
-                     />
-                     <label htmlFor="digitalRole" className="font-bold flex items-center gap-2 text-blue-900 cursor-pointer">
-                       <ShieldCheck className="w-5 h-5 text-blue-600" />
-                       Digitale Rolle aktivieren (Login)
-                     </label>
-                   </div>
-                   
-                   {enableDigitalRole && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-blue-200 ml-2">
-                       <div>
-                         <label className="block text-sm text-blue-800 mb-1">Login E-Mail *</label>
-                         <input 
-                           type="email" 
-                           required={enableDigitalRole}
-                           value={digitalEmail} 
-                           onChange={e => setDigitalEmail(e.target.value)} 
-                           placeholder="vorname@beispiel.at"
-                           className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
-                         />
+                   {hasDigitalRole ? (
+                       <div className="flex items-center gap-2 text-green-700">
+                           <ShieldCheck className="w-5 h-5 text-green-600" />
+                           <span className="font-bold">Digitale Rolle ist aktiv für {existingDigitalEmail}</span>
                        </div>
-                       <div>
-                         <label className="block text-sm text-blue-800 mb-1">Passwort *</label>
-                         <input 
-                           type="password" 
-                           required={enableDigitalRole}
-                           minLength={6}
-                           value={digitalPassword} 
-                           onChange={e => setDigitalPassword(e.target.value)} 
-                           placeholder="Mindestens 6 Zeichen"
-                           className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
-                         />
-                       </div>
-                     </div>
+                   ) : (
+                       <>
+                           <div className="flex items-center gap-2 mb-4">
+                             <input 
+                               type="checkbox" 
+                               id="digitalRole"
+                               checked={enableDigitalRole}
+                               onChange={e => setEnableDigitalRole(e.target.checked)}
+                               className="w-4 h-4 text-brand-primary rounded border-gray-300 focus:ring-brand-primary"
+                             />
+                             <label htmlFor="digitalRole" className="font-bold flex items-center gap-2 text-blue-900 cursor-pointer">
+                               <ShieldCheck className="w-5 h-5 text-blue-600" />
+                               Digitale Rolle aktivieren (Login)
+                             </label>
+                           </div>
+                           
+                           {enableDigitalRole && (
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-blue-200 ml-2">
+                               <div>
+                                 <label className="block text-sm text-blue-800 mb-1">Login E-Mail *</label>
+                                 <input 
+                                   type="email" 
+                                   required={enableDigitalRole}
+                                   value={digitalEmail} 
+                                   onChange={e => setDigitalEmail(e.target.value)} 
+                                   placeholder="vorname@beispiel.at"
+                                   className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
+                                 />
+                               </div>
+                               <div>
+                                 <label className="block text-sm text-blue-800 mb-1">Passwort *</label>
+                                 <input 
+                                   type="password" 
+                                   required={enableDigitalRole}
+                                   minLength={6}
+                                   value={digitalPassword} 
+                                   onChange={e => setDigitalPassword(e.target.value)} 
+                                   placeholder="Mindestens 6 Zeichen"
+                                   className="w-full p-2 border border-blue-200 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white" 
+                                 />
+                               </div>
+                             </div>
+                           )}
+                       </>
                    )}
                  </div>
                )}

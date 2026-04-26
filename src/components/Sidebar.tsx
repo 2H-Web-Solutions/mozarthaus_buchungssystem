@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CalendarDays, Calendar, Users, Settings as SettingsIcon, LayoutDashboard, Ticket, Columns, ChevronDown, ChevronRight, BarChart } from 'lucide-react';
+import { CalendarDays, Calendar, Users, Settings as SettingsIcon, LayoutDashboard, Ticket, Columns, ChevronDown, ChevronRight, BarChart, Receipt } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -11,15 +11,24 @@ import { useAuth } from '../contexts/AuthContext';
 export function Sidebar() {
   const location = useLocation();
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
-  const [isStammdatenOpen, setIsStammdatenOpen] = useState(false);
+  const [openSubMenus, setOpenSubMenus] = useState<string[]>([]);
   const { appUser } = useAuth();
   const role = appUser?.role || 'admin'; // fallback to admin if not found (or for existing unprotected use cases)
 
   useEffect(() => {
-    if (location.pathname.startsWith('/stammdaten')) {
-      setIsStammdatenOpen(true);
+    if (location.pathname.startsWith('/stammdaten') && !openSubMenus.includes('Stammdaten')) {
+      setOpenSubMenus(prev => [...prev, 'Stammdaten']);
+    }
+    if (location.pathname.startsWith('/invoices') && !openSubMenus.includes('Rechnungen / HN')) {
+      setOpenSubMenus(prev => [...prev, 'Rechnungen / HN']);
     }
   }, [location.pathname]);
+
+  const toggleSubMenu = (menuName: string) => {
+    setOpenSubMenus(prev => 
+      prev.includes(menuName) ? prev.filter(m => m !== menuName) : [...prev, menuName]
+    );
+  };
 
   useEffect(() => {
     const docRef = doc(db, `apps/${APP_ID}/settings`, 'general');
@@ -53,6 +62,14 @@ export function Sidebar() {
     { name: 'Status', path: '/kanban', icon: Columns, roles: ['admin'] },
     { name: 'Transaktions-Log', path: '/bookings', icon: Calendar, roles: ['admin'] },
     { name: 'Statistiken', path: '/statistics', icon: BarChart, roles: ['admin'] },
+    {
+      name: 'Rechnungen / HN',
+      icon: Receipt,
+      roles: ['admin'],
+      subItems: [
+        { name: 'Honorarnoten', path: '/invoices/honorarnoten', roles: ['admin'] }
+      ]
+    },
     { 
       name: 'Stammdaten', 
       icon: Users,
@@ -95,10 +112,11 @@ export function Sidebar() {
           
           if (item.subItems) {
             const isActive = item.subItems.some(sub => location.pathname === sub.path);
+            const isOpen = openSubMenus.includes(item.name);
             return (
               <div key={item.name} className="space-y-1">
                 <button
-                  onClick={() => setIsStammdatenOpen(!isStammdatenOpen)}
+                  onClick={() => toggleSubMenu(item.name)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
                     isActive 
                       ? 'bg-white/50 text-brand-primary font-medium' 
@@ -109,10 +127,10 @@ export function Sidebar() {
                     <Icon className="w-5 h-5" />
                     {item.name}
                   </div>
-                  {isStammdatenOpen ? <ChevronDown className="w-4 h-4 text-brand-primary" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                  {isOpen ? <ChevronDown className="w-4 h-4 text-brand-primary" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                 </button>
                 
-                {isStammdatenOpen && (
+                {isOpen && (
                   <div className="ml-9 space-y-1 mt-1">
                     {item.subItems.filter(sub => (sub as any).roles.includes(role)).map(subItem => {
                       const isSubActive = location.pathname === subItem.path;

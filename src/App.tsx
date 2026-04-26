@@ -11,6 +11,7 @@ import { Kanban } from './pages/Kanban';
 import { Partners } from './pages/Partners';
 import { PartnerTypes } from './pages/PartnerTypes';
 import { Musiker } from './pages/Musiker';
+import { MusicianDetail } from './pages/MusicianDetail';
 import { Mitarbeiter } from './pages/Mitarbeiter';
 import { PricingCategories } from './pages/PricingCategories';
 import { HonorarnotePrint } from './pages/events/HonorarnotePrint';
@@ -22,6 +23,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Admins } from './pages/auth/Admins';
+import { HonorarnotenOverview } from './pages/admin/invoices/HonorarnotenOverview';
+import { HonorarnotePrintTemplate } from './pages/admin/invoices/HonorarnotePrintTemplate';
 
 // Helper component to redirect users based on their role logic
 function RoleBasedIndex() {
@@ -57,15 +60,18 @@ function App() {
           <Route path="stammdaten/partner" element={<Partners />} />
           <Route path="stammdaten/partner-types" element={<PartnerTypes />} />
           <Route path="stammdaten/musiker" element={<Musiker />} />
+          <Route path="stammdaten/musiker/:id" element={<MusicianDetail />} />
           <Route path="stammdaten/mitarbeiter" element={<Mitarbeiter />} />
           <Route path="stammdaten/pricing" element={<PricingCategories />} />
           <Route path="stammdaten/admin" element={<Admins />} />
+          <Route path="invoices/honorarnoten" element={<HonorarnotenOverview />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="settings" element={<Settings />} />
           <Route path="admin/system-test" element={<SyncValidator />} />
         </Route>
         {/* Print-only routes without Dashboard Shell */}
         <Route path="/events/:eventId/honorarnote/:musikerId" element={<ProtectedRoute><HonorarnotePrint /></ProtectedRoute>} />
+        <Route path="/invoices/honorarnoten/print/:year/:month/:musikerId" element={<ProtectedRoute><HonorarnotePrintTemplate /></ProtectedRoute>} />
       </Routes>
     </Router>
     </AuthProvider>
