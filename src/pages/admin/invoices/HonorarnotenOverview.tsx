@@ -165,15 +165,15 @@ export function HonorarnotenOverview() {
 
         await new Promise(resolve => setTimeout(resolve, 800)); // wait for render and font paint
 
-        const content = container.firstElementChild || container;
+        const content = (container.firstElementChild || container) as HTMLElement;
 
         const periodStr = `${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`;
         const opt = {
-            margin: [10, 10, 10, 10],
+            margin: 10,
             filename: `Honorarnote_${m.nachname}_${periodStr}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
+            image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: 800 }, 
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as 'portrait' }
         };
 
         await html2pdf().set(opt).from(content).save();

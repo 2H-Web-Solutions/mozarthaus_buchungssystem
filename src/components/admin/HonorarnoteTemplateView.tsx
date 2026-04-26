@@ -1,5 +1,4 @@
-import React from 'react';
-import { Musiker } from '../../../services/firebase/musikerService';
+import { Musiker } from '../../services/firebase/musikerService';
 
 export interface Gig {
   dateStr: string;

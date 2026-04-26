@@ -38,7 +38,7 @@ export function MusicianDetail() {
   const [musician, setMusician] = useState<Musiker | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [eventsData, setEventsData] = useState<any[]>([]);
+
   const [groupedHistory, setGroupedHistory] = useState<Record<string, { month: number, year: number, monthName: string, gigs: Gig[], totalGage: number }>>({});
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
@@ -216,14 +216,14 @@ export function MusicianDetail() {
 
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const content = container.firstElementChild || container;
+        const content = (container.firstElementChild || container) as HTMLElement;
         const periodStr = `${String(data.month).padStart(2, '0')}-${data.year}`;
         const opt = {
-            margin: [10, 10, 10, 10],
+            margin: 10,
             filename: `Honorarnote_${musician.nachname}_${periodStr}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
+            image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: 800 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as 'portrait' }
         };
 
         await html2pdf().set(opt).from(content).save();
