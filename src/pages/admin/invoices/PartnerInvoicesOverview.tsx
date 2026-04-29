@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { APP_ID } from '../../../lib/constants';
 import { Booking, Partner, TicketCategory } from '../../../types/schema';
-import { Printer, CalendarDays, Receipt, Building2 } from 'lucide-react';
+import { Printer, CalendarDays, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getBookingDisplayData } from '../../../utils/bookingMapper';
 

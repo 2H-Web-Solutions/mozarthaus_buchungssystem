@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
@@ -179,8 +179,6 @@ export function PartnerInvoicePrintTemplate() {
   if (!partner) {
       return <div className="p-8">Partner nicht gefunden.</div>;
   }
-
-  const periodStr = `${String(month).padStart(2, '0')}/${year}`;
 
   return (
     <div className="bg-white min-h-screen text-black print:p-0">
