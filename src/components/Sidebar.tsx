@@ -67,7 +67,8 @@ export function Sidebar() {
       icon: Receipt,
       roles: ['admin'],
       subItems: [
-        { name: 'Honorarnoten', path: '/invoices/honorarnoten', roles: ['admin'] }
+        { name: 'Honorarnoten', path: '/invoices/honorarnoten', roles: ['admin'] },
+        { name: 'Partner', path: '/invoices/partner', roles: ['admin'] }
       ]
     },
     { 
@@ -106,7 +107,7 @@ export function Sidebar() {
       <div className="border-t border-gray-400 mx-4"></div>
 
       {/* Middle Area */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto overflow-x-hidden">
         {navItems.map((item) => {
           const Icon = item.icon;
           
@@ -181,8 +182,6 @@ export function Sidebar() {
           <span className="text-sm font-medium text-gray-700 tracking-tight">System Online</span>
         </div>
         
-        {/* Logout Button */}
-
         {/* Logout Button */}
         <button
           onClick={async () => {

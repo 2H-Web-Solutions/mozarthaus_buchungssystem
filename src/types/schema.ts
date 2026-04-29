@@ -107,6 +107,10 @@ export interface Partner {
   bezahloption?: string;
   bezahlinformation?: string;
   website?: string;
+
+  // Occupancy Notification Settings
+  notifyOnHighOccupancy?: boolean;
+  occupancyEmailTemplate?: string;
 }
 
 export interface TicketCategory {

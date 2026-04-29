@@ -18,7 +18,7 @@ export function BookingFlow() {
   const [selectedEventId, setSelectedEventId] = useState('');
   
   // Section 2
-  const [partners, setPartners] = useState<{id: string, name: string, type: string}[]>([]);
+  const [partners, setPartners] = useState<{id: string, name: string, type: string, email: string, phone: string, contactPerson: string}[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
   const [selectedTariffGroup, setSelectedTariffGroup] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
@@ -57,7 +57,10 @@ export function BookingFlow() {
         const partnerData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           name: doc.data().name || doc.data().companyName || 'Unbenannt',
-          type: doc.data().type || ''
+          type: doc.data().type || '',
+          email: doc.data().email || '',
+          phone: doc.data().telefon || doc.data().phone || '',
+          contactPerson: doc.data().contactPerson || ''
         }));
         setPartners(partnerData);
       } catch (error) {
@@ -163,14 +166,16 @@ export function BookingFlow() {
 
   const baseCategoryColors = useMemo(() => {
     const mapping: Record<string, string> = {
-      'A': '#D4AF37',
-      'B': '#1E3A8A',
-      'STUDENT': '#10B981'
+      'A': '#BC6868',
+      'B': '#2D7FBD',
+      'STUDENT': '#96BF33'
     };
     categories.filter(c => !c.type || c.type === 'main').forEach(c => {
-      if (c.name.toLowerCase().includes('a')) mapping['A'] = c.colorCode || mapping['A'];
-      if (c.name.toLowerCase().includes('b')) mapping['B'] = c.colorCode || mapping['B'];
-      if (c.name.toLowerCase().includes('student')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
+      const n = (c.name || '').toLowerCase();
+      const id = (c.id || '').toLowerCase();
+      if (n.endsWith(' a') || n === 'a' || id.includes('kat_a')) mapping['A'] = c.colorCode || mapping['A'];
+      else if (n.endsWith(' b') || n === 'b' || id.includes('kat_b')) mapping['B'] = c.colorCode || mapping['B'];
+      else if (n.includes('student') || id.includes('stud')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
     });
     return mapping;
   }, [categories]);
@@ -198,8 +203,7 @@ export function BookingFlow() {
       if (!customTotalPrice) missing.push('Pauschalpreis (€)');
     } else if (bookingType === 'double') {
       if (!selectedEventId) missing.push('Konzert / Event Option');
-      if (!sellerReference) missing.push('Verkäuferreferenz');
-      if (!contactPerson) missing.push('Kontaktperson');
+      if (!customerName) missing.push('Vor- und Nachname');
       if (!customerEmail) missing.push('Email');
       if (!customerPhone) missing.push('Telefon');
       if (!doubleCategoryId) missing.push('Ticket-Kategorie wählen');
@@ -426,7 +430,19 @@ export function BookingFlow() {
                  <label className="block text-sm font-medium text-gray-700 mb-1">B2B Partner (Optional)</label>
                  <select
                    value={selectedPartnerId}
-                   onChange={e => setSelectedPartnerId(e.target.value)}
+                   onChange={e => {
+                     const pid = e.target.value;
+                     setSelectedPartnerId(pid);
+                     if (pid) {
+                       const p = partners.find(x => x.id === pid);
+                       if (p) {
+                         setCustomerName(p.contactPerson || p.name || '');
+                         if (bookingType === 'double') setContactPerson(p.contactPerson || p.name || '');
+                         setCustomerEmail(p.email || '');
+                         setCustomerPhone(p.phone || '');
+                       }
+                     }
+                   }}
                    className="w-full p-2 border border-gray-300 rounded-md outline-none bg-white"
                  >
                    <option value="">-- Kein Partner --</option>
@@ -460,11 +476,11 @@ export function BookingFlow() {
            {bookingType === 'double' && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-1">Verkäuferreferenz</label>
+                 <label className="block text-sm font-bold text-gray-700 mb-1">Verkäuferreferenz <span className="text-gray-400 font-normal">(Optional)</span></label>
                  <input type="text" value={sellerReference} onChange={e => setSellerReference(e.target.value)} placeholder="z.B. REF-12345" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                </div>
                <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-1">Kontaktperson</label>
+                 <label className="block text-sm font-bold text-gray-700 mb-1">Kontaktperson <span className="text-gray-400 font-normal">(Optional)</span></label>
                  <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Name der meldenden Person" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                </div>
              </div>
@@ -473,21 +489,21 @@ export function BookingFlow() {
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div>
                <label className="block text-sm font-bold text-gray-700 mb-1">
-                 Vor- und Nachname {bookingType === 'einzel' && <span className="text-red-500">*</span>}
+                 Vor- und Nachname <span className="text-red-500">*</span>
                </label>
-               <input type="text" required={bookingType === 'einzel'} value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Max Mustermann" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
+               <input type="text" required value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Max Mustermann" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
              </div>
              <div>
                <label className="block text-sm font-bold text-gray-700 mb-1">
-                 Email {bookingType === 'einzel' && <span className="text-red-500">*</span>}
+                 Email <span className="text-red-500">*</span>
                </label>
-               <input type="email" required={bookingType === 'einzel'} value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="max@example.com" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
+               <input type="email" required value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="max@example.com" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
              </div>
              <div>
                <label className="block text-sm font-bold text-gray-700 mb-1">
-                 Telefon {bookingType === 'einzel' && <span className="text-red-500">*</span>}
+                 Telefon <span className="text-red-500">*</span>
                </label>
-               <input type="tel" required={bookingType === 'einzel'} value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="+43 1 123456" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
+               <input type="tel" required value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="+43 1 123456" className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
              </div>
            </div>
         </div>

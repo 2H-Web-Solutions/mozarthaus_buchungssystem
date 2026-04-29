@@ -16,6 +16,7 @@ export interface Musiker {
   steuernummer: string;
   steuersatz: number;
   active?: boolean;
+  grundgage?: number;
 }
 
 export async function fetchMusiker(): Promise<Musiker[]> {
@@ -25,7 +26,13 @@ export async function fetchMusiker(): Promise<Musiker[]> {
     snapshot.forEach(doc => {
       musiker.push({ id: doc.id, ...doc.data() } as Musiker);
     });
-    return musiker;
+    return musiker.sort((a, b) => {
+      const aActive = a.active !== false;
+      const bActive = b.active !== false;
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      return (a.nachname || '').localeCompare(b.nachname || '');
+    });
   } catch (error) {
     console.error('Error fetching musiker:', error);
     return [];

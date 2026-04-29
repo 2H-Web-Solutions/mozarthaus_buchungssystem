@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, setDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, getDocs, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Partner } from '../types/schema';
-import { runPartnerImport } from '../utils/importPartnerData';
-import { Plus, Users, Search, Edit2, Archive, ArchiveRestore } from 'lucide-react';
+import { Plus, Users, Search, Edit2, Archive, ArchiveRestore, Trash2, RefreshCw, Mail } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
 
@@ -14,14 +13,12 @@ export function Partners() {
   const [isSaving, setIsSaving] = useState(false);
   
   const { isAdmin } = useAdmin();
-  const [partnerToArchive, setPartnerToArchive] = useState<Partner | null>(null);
-  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   // List State
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('nameAsc');
   const [filterType, setFilterType] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
   // Form State
   const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
@@ -41,6 +38,28 @@ export function Partners() {
   const [website, setWebsite] = useState('');
   const [bezahloption, setBezahloption] = useState('');
   const [bezahlinformation, setBezahlinformation] = useState('');
+  const [notifyOnHighOccupancy, setNotifyOnHighOccupancy] = useState(false);
+  
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [globalOccupancyEmailTemplate, setGlobalOccupancyEmailTemplate] = useState('');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  const defaultTemplate = `Sehr geehrte Damen und Herren,
+
+Das Konzert am [Datum/Zeit] ist bereits ausverkauft.
+
+Für weitere Fragen stehen wir gerne unter konzerte@mozarthaus.at oder telefonisch unter (0043)-1-911 9077 bereit!
+
+Wir danken Ihnen für die Mitarbeit und verbleiben,
+
+mit freundlichen Grüßen
+
+Ihr Konzerte im Mozarthaus - Team
+
+www.mozarthaus.at
+Singerstrasse 7
+A - 1010 Wien
+(0043)-1-911 9077`;
 
   useEffect(() => {
     const fetchPartnerTypes = async () => {
@@ -60,6 +79,22 @@ export function Partners() {
       }
     };
     fetchPartnerTypes();
+
+    const fetchGlobalTemplate = async () => {
+      try {
+        const docRef = doc(db, `apps/${APP_ID}/settings`, 'partner_email');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().template) {
+          setGlobalOccupancyEmailTemplate(docSnap.data().template);
+        } else {
+          setGlobalOccupancyEmailTemplate(defaultTemplate);
+        }
+      } catch (err) {
+        console.error("Error fetching global template", err);
+        setGlobalOccupancyEmailTemplate(defaultTemplate);
+      }
+    };
+    fetchGlobalTemplate();
   }, []);
 
   useEffect(() => {
@@ -75,7 +110,7 @@ export function Partners() {
     let result = [...partners];
 
     // Filter by Active/Archived
-    if (!showArchived) {
+    if (activeTab === 'active') {
       result = result.filter(p => p.aktiv !== false);
     } else {
       result = result.filter(p => p.aktiv === false);
@@ -105,7 +140,7 @@ export function Partners() {
     });
 
     return result;
-  }, [partners, searchQuery, sortBy, filterType, showArchived]);
+  }, [partners, searchQuery, sortBy, filterType, activeTab]);
 
   const openCreateModal = () => {
     setEditingPartnerId(null);
@@ -122,6 +157,7 @@ export function Partners() {
     setWebsite('');
     setBezahloption('');
     setBezahlinformation('');
+    setNotifyOnHighOccupancy(false);
     setIsModalOpen(true);
   };
 
@@ -140,6 +176,7 @@ export function Partners() {
     setWebsite(partner.website || '');
     setBezahloption(partner.bezahloption || '');
     setBezahlinformation(partner.bezahlinformation || '');
+    setNotifyOnHighOccupancy(partner.notifyOnHighOccupancy || false);
     setIsModalOpen(true);
   };
 
@@ -164,6 +201,7 @@ export function Partners() {
         website,
         bezahloption,
         bezahlinformation,
+        notifyOnHighOccupancy,
         aktiv: true
       };
 
@@ -183,22 +221,39 @@ export function Partners() {
     }
   };
 
-  const confirmArchive = (partner: Partner) => {
-    setPartnerToArchive(partner);
-    setIsArchiveModalOpen(true);
-  };
-
-  const handleArchive = async () => {
-    if (!partnerToArchive) return;
+  const handleArchive = async (id: string, activeStatus: boolean) => {
     try {
-      await updateDoc(doc(db, `apps/${APP_ID}/partners`, partnerToArchive.id), {
-        aktiv: partnerToArchive.aktiv === false ? true : false
+      await updateDoc(doc(db, `apps/${APP_ID}/partners`, id), {
+        aktiv: activeStatus
       });
-      setIsArchiveModalOpen(false);
-      setPartnerToArchive(null);
     } catch(err) {
       console.error(err);
       alert('Fehler beim Ändern des Status');
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (window.confirm(`Möchten Sie den Partner '${name}' unwiderruflich löschen?`)) {
+      try {
+        await deleteDoc(doc(db, `apps/${APP_ID}/partners`, id));
+      } catch (err) {
+        alert('Fehler beim Löschen');
+      }
+    }
+  };
+
+  const handleSaveGlobalTemplate = async () => {
+    setIsSavingTemplate(true);
+    try {
+      await setDoc(doc(db, `apps/${APP_ID}/settings`, 'partner_email'), {
+        template: globalOccupancyEmailTemplate
+      }, { merge: true });
+      setIsTemplateModalOpen(false);
+    } catch(err) {
+      console.error(err);
+      alert('Fehler beim Speichern der Vorlage');
+    } finally {
+      setIsSavingTemplate(false);
     }
   };
 
@@ -209,20 +264,11 @@ export function Partners() {
         <div className="flex flex-wrap items-center gap-3">
           {isAdmin && (
             <>
-              <button
-                onClick={async () => {
-                  if (!window.confirm('Achtung: Sollen die Partner-Rohdaten in die Datenbank importiert werden?')) return;
-                  try {
-                    await runPartnerImport();
-                    alert('Partner-Import abgeschlossen!');
-                  } catch (err) {
-                    console.error(err);
-                    alert('Import fehlgeschlagen!');
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold text-sm"
+              <button 
+                onClick={() => setIsTemplateModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition text-sm"
               >
-                DEV: Bulk Import Partner
+                <Mail className="w-4 h-4"/> Email Vorlage
               </button>
               <button 
                 onClick={openCreateModal}
@@ -235,46 +281,62 @@ export function Partners() {
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Partner suchen..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-          />
-        </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-        >
-          <option value="">Alle Typen</option>
-          {partnerTypes.map(pt => (
-            <option key={pt.id} value={pt.id}>{pt.name}</option>
-          ))}
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-        >
-          <option value="nameAsc">Name (A-Z)</option>
-          <option value="nameDesc">Name (Z-A)</option>
-          <option value="type">Kategorie</option>
-        </select>
+      {/* Tabs & Search */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-200 pb-2">
+        <div className="flex space-x-4">
         <button
-          onClick={() => setShowArchived(!showArchived)}
-          className={`px-4 py-2 rounded-lg border font-medium transition whitespace-nowrap ${
-            showArchived 
-              ? 'bg-gray-800 text-white border-gray-800' 
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          onClick={() => setActiveTab('active')}
+          className={`py-2 px-4 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'active' 
+              ? 'border-brand-primary text-brand-primary font-bold' 
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
           }`}
         >
-          {showArchived ? 'Gültige anzeigen' : 'Archivierte anzeigen'}
+          Aktive Partner
         </button>
+        <button
+          onClick={() => setActiveTab('archived')}
+          className={`py-2 px-4 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'archived' 
+              ? 'border-brand-primary text-brand-primary font-bold' 
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
+        >
+          Archivierte Partner
+        </button>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary bg-white w-full md:w-auto"
+            >
+              <option value="">Alle Typen</option>
+              {partnerTypes.map(pt => (
+                <option key={pt.id} value={pt.id}>{pt.name}</option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary bg-white w-full md:w-auto"
+            >
+              <option value="nameAsc">Name (A-Z)</option>
+              <option value="nameDesc">Name (Z-A)</option>
+              <option value="type">Kategorie</option>
+            </select>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Partner suchen..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+              />
+            </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -289,13 +351,32 @@ export function Partners() {
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button 
-                  onClick={() => confirmArchive(p)}
-                  className={`p-1.5 rounded-md transition ${p.aktiv === false ? 'text-green-600 hover:bg-green-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
-                  title={p.aktiv === false ? "Partner wiederherstellen" : "Partner archivieren"}
-                >
-                  {p.aktiv === false ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                </button>
+                {activeTab === 'active' ? (
+                  <button 
+                    onClick={() => handleArchive(p.id, false)}
+                    className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md transition"
+                    title="Partner archivieren"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => handleArchive(p.id, true)}
+                      className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition"
+                      title="Partner wiederherstellen"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(p.id, p.companyName || p.contactPerson || 'Partner')}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition"
+                      title="Endgültig löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             )}
             <div className="flex justify-between items-start mb-4">
@@ -316,6 +397,28 @@ export function Partners() {
               <p><span className="font-medium">Email:</span> <a href={`mailto:${p.email}`} className="text-blue-600 hover:underline">{p.email}</a></p>
               {p.telefon && <p><span className="font-medium">Tel:</span> {p.telefon}</p>}
             </div>
+            
+            {isAdmin && p.aktiv !== false && (
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <label className="flex items-center gap-2 cursor-pointer text-xs">
+                  <input 
+                    type="checkbox" 
+                    checked={!!p.notifyOnHighOccupancy} 
+                    onChange={async (e) => {
+                      const newValue = e.target.checked;
+                      try {
+                        await updateDoc(doc(db, `apps/${APP_ID}/partners`, p.id), { notifyOnHighOccupancy: newValue });
+                      } catch (err) {
+                        console.error(err);
+                        alert('Fehler beim Ändern der Automatisierungseinstellung');
+                      }
+                    }}
+                    className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary w-3.5 h-3.5" 
+                  />
+                  <span className="font-medium text-gray-600">80% Stop-Sales Email senden</span>
+                </label>
+              </div>
+            )}
           </div>
         ))}
         {filteredAndSortedPartners.length === 0 && (
@@ -419,6 +522,22 @@ export function Partners() {
                     <input type="number" step="0.01" value={commissionRate} onChange={e => setCommissionRate(e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" placeholder="z.B. 15" />
                  </div>
 
+                 <div className="md:col-span-2 border-b pb-2 mt-4 mb-2">
+                   <h3 className="font-bold text-gray-800">Automatisierungen</h3>
+                 </div>
+
+                 <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="flex items-center gap-2 cursor-pointer mb-0">
+                      <input 
+                        type="checkbox" 
+                        checked={notifyOnHighOccupancy} 
+                        onChange={e => setNotifyOnHighOccupancy(e.target.checked)} 
+                        className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary w-4 h-4" 
+                      />
+                      <span className="font-medium text-gray-800">Email bei 80% Auslastung senden (Ausverkauft-Warnung)</span>
+                    </label>
+                 </div>
+
                </div>
 
                <div className="flex gap-3 justify-end mt-8 pt-4 border-t border-gray-200">
@@ -433,14 +552,33 @@ export function Partners() {
            </div>
         </div>
       )}
+      {isTemplateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg w-full max-w-2xl">
+             <h2 className="text-xl font-heading text-brand-primary mb-2 flex items-center gap-2">
+               <Mail className="w-5 h-5"/> Email Vorlage (Stop-Sales)
+             </h2>
+             <p className="text-sm text-gray-600 mb-6">Diese Vorlage wird für alle Partner verwendet, die für "Email bei 80% Auslastung senden" aktiviert sind.</p>
+             
+             <div className="mb-4">
+               <p className="text-xs text-gray-500 mb-2">Platzhalter: <code className="bg-gray-100 px-1 rounded">[Datum/Zeit]</code> wird beim Senden automatisch ersetzt.</p>
+               <textarea 
+                 value={globalOccupancyEmailTemplate} 
+                 onChange={e => setGlobalOccupancyEmailTemplate(e.target.value)} 
+                 rows={12} 
+                 className="w-full p-3 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary text-sm font-mono bg-gray-50" 
+               />
+             </div>
 
-      <ConfirmDeleteModal
-        isOpen={isArchiveModalOpen}
-        onClose={() => setIsArchiveModalOpen(false)}
-        onConfirm={handleArchive}
-        title={partnerToArchive?.aktiv === false ? "Partner wiederherstellen" : "Partner archivieren"}
-        message={`Möchten Sie den Partner '${partnerToArchive?.companyName}' wirklich ${partnerToArchive?.aktiv === false ? 'wiederherstellen' : 'archivieren (wird ausgeblendet)'}?`}
-      />
+             <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-200">
+               <button type="button" onClick={() => setIsTemplateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium">Abbrechen</button>
+               <button disabled={isSavingTemplate} onClick={handleSaveGlobalTemplate} className="px-6 py-2 bg-brand-primary text-white rounded hover:bg-red-700 disabled:opacity-50 font-bold">
+                 {isSavingTemplate ? 'Speichert...' : 'Vorlage speichern'}
+               </button>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

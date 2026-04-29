@@ -64,6 +64,7 @@ export function Events() {
   const [isLoading, setIsLoading] = useState(false);
   const [pageSize, setPageSize] = useState(50);
   const [filterType, setFilterType] = useState<'all' | 'privat' | 'regiondo'>('all');
+  const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -117,7 +118,7 @@ export function Events() {
     try {
       const baseColl = collection(db, `apps/${APP_ID}/events`);
 
-      if (filterType === 'all' && !isMusiker) {
+      if (filterType === 'all' && timeFilter === 'all' && !isMusiker) {
         // --- Server-side Paginated Path ---
         let q = query(baseColl, orderBy('date', 'asc'), limit(pageSize));
         
@@ -147,14 +148,16 @@ export function Events() {
         }
       } else {
         // --- Client-side Filtered Path ---
-        // Fetch up to 1000 events to ensure we cover a reasonable range without complex indexes
-        let q = query(baseColl, orderBy('date', 'asc'), limit(1000));
+        // Fetch up to 3000 events to ensure we cover past and future without complex indexes
+        let q = query(baseColl, orderBy('date', 'asc'), limit(3000));
         const snap = await getDocs(q);
         const fetchedEvents: Event[] = [];
         snap.forEach(d => fetchedEvents.push({ id: d.id, ...d.data() } as Event));
         
+        const todayStr = new Date().toISOString().split('T')[0];
+
         // Filter in JS
-        const filtered = fetchedEvents.filter(evt => {
+        let filtered = fetchedEvents.filter(evt => {
           let matchesFilter = true;
           if (filterType === 'privat') matchesFilter = evt.is_private === true;
           if (filterType === 'regiondo') matchesFilter = !evt.is_private;
@@ -164,8 +167,30 @@ export function Events() {
              if (!isAssigned) matchesFilter = false;
           }
 
+          if (matchesFilter && timeFilter !== 'all') {
+            let evtDateStr = '';
+            if (typeof evt.date === 'string') {
+              evtDateStr = evt.date;
+            } else if (evt.date && (evt.date as any).toDate) {
+              const d = (evt.date as any).toDate();
+              const offsetMs = d.getTimezoneOffset() * 60 * 1000;
+              const localDate = new Date(d.getTime() - offsetMs);
+              evtDateStr = localDate.toISOString().split('T')[0];
+            }
+
+            if (evtDateStr) {
+              if (timeFilter === 'upcoming' && evtDateStr < todayStr) matchesFilter = false;
+              if (timeFilter === 'past' && evtDateStr >= todayStr) matchesFilter = false;
+            }
+          }
+
           return matchesFilter;
         });
+
+        // If showing past events, reverse to show the most recent past events first
+        if (timeFilter === 'past') {
+           filtered.reverse();
+        }
 
         // Set total count for the filtered view
         setTotalEvents(filtered.length);
@@ -186,7 +211,7 @@ export function Events() {
   };
 
   const handlePageChange = (direction: 'next' | 'prev') => {
-    if (filterType === 'all' && !isMusiker) {
+    if (filterType === 'all' && timeFilter === 'all' && !isMusiker) {
       fetchEvents(direction);
       setCurrentPage(prev => direction === 'next' ? prev + 1 : prev - 1);
     } else {
@@ -198,11 +223,11 @@ export function Events() {
   useEffect(() => {
     setCurrentPage(1);
     fetchEvents('initial');
-  }, [filterType, pageSize]);
+  }, [filterType, timeFilter, pageSize]);
 
   // Handle local pagination for filtered views
   useEffect(() => {
-    if (filterType !== 'all' || isMusiker) {
+    if (filterType !== 'all' || timeFilter !== 'all' || isMusiker) {
       fetchEvents('initial');
     }
   }, [currentPage]);
@@ -216,6 +241,27 @@ export function Events() {
         </div>
         
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shadow-inner">
+            <button 
+              onClick={() => setTimeFilter('upcoming')}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${timeFilter === 'upcoming' ? 'bg-white text-brand-primary shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Aktuell & Zukünftig
+            </button>
+            <button 
+              onClick={() => setTimeFilter('past')}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${timeFilter === 'past' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Vergangene
+            </button>
+            <button 
+              onClick={() => setTimeFilter('all')}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${timeFilter === 'all' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Alle
+            </button>
+          </div>
+
           <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shadow-inner">
             <button 
               onClick={() => setFilterType('all')}
@@ -407,7 +453,7 @@ export function Events() {
             
             <button
               onClick={() => handlePageChange('next')}
-              disabled={(filterType === 'all' ? events.length < pageSize : (currentPage * pageSize) >= totalEvents) || isLoading}
+              disabled={(filterType === 'all' && timeFilter === 'all' && !isMusiker ? events.length < pageSize : (currentPage * pageSize) >= totalEvents) || isLoading}
               className="p-2.5 text-gray-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-xl transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <span className="sr-only">Weiter</span>

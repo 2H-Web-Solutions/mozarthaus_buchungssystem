@@ -79,7 +79,7 @@ export function getBookingDisplayData(booking: Booking): BookingDisplayData {
 
   // 6. Resolve Event Details
   const eventTitle = booking.eventTitle || lp.product_name || lp.variation_name || booking.eventId || 'Unbekanntes Event';
-  const eventDateTime = lp.event_date_time || booking.eventDate || booking.dateTime || '';
+  const eventDateTime = lp.event_date_time || booking.eventDate || booking.dateTime || (booking as any).date || '';
 
   // 7. Resolve Booking Number
   const bookingNumber = booking.bookingNumber || lp.order_number || lp.order_id || lp.booking_key || booking.id.split('_').pop() || '-';

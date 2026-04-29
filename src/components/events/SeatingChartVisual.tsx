@@ -33,9 +33,11 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
       'STUDENT': '#96BF33'
     };
     categories.filter(c => !c.type || c.type === 'main').forEach(c => {
-      if (c.name.toLowerCase().includes('a')) mapping['A'] = c.colorCode || mapping['A'];
-      if (c.name.toLowerCase().includes('b')) mapping['B'] = c.colorCode || mapping['B'];
-      if (c.name.toLowerCase().includes('student')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
+      const n = (c.name || '').toLowerCase();
+      const id = (c.id || '').toLowerCase();
+      if (n.endsWith(' a') || n === 'a' || id.includes('kat_a')) mapping['A'] = c.colorCode || mapping['A'];
+      else if (n.endsWith(' b') || n === 'b' || id.includes('kat_b')) mapping['B'] = c.colorCode || mapping['B'];
+      else if (n.includes('student') || id.includes('stud')) mapping['STUDENT'] = c.colorCode || mapping['STUDENT'];
     });
     return mapping;
   }, [categories]);
@@ -140,7 +142,7 @@ export function SeatingChartVisual({ eventId, seating = {}, bookings = [], readO
                 customerName = display.customerName;
               }
               
-              const seatLabel = `${el.id.replace(/row_|_seat_/g, ' ').toUpperCase()} (Cat ${category})`;
+              const seatLabel = el.id.replace(/row_|_seat_/g, ' ').toUpperCase();
               const displayTitle = isBooked && customerName ? `${seatLabel} - ${customerName}` : seatLabel;
               
               const seatStyle = getSeatColor(el.id);

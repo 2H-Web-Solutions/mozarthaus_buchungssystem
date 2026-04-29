@@ -26,8 +26,9 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
       newEnsemble[index] = {
         ...newEnsemble[index],
         musikerId: value,
-        name: selectedMusiker ? `${selectedMusiker.vorname} ${selectedMusiker.nachname}` : '',
+        name: selectedMusiker ? `${selectedMusiker.nachname} ${selectedMusiker.vorname}` : '',
         instrument: selectedMusiker?.instrument || newEnsemble[index].instrument || '',
+        gage: selectedMusiker?.grundgage !== undefined ? selectedMusiker.grundgage : newEnsemble[index].gage,
       };
     } else {
       newEnsemble[index] = { ...newEnsemble[index], [field]: value };
@@ -70,7 +71,9 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
               {musikerList
                 .filter(m => m.art === 'Musiker' || m.id === row.musikerId)
                 .map(m => (
-                 <option key={m.id} value={m.id}>{m.vorname} {m.nachname} {(m.instrument) ? `(${m.instrument})` : ''}</option>
+                 <option key={m.id} value={m.id}>
+                   {m.nachname} {m.vorname} {m.instrument ? `(${m.instrument})` : ''} {m.active === false ? '[Archiviert]' : ''}
+                 </option>
               ))}
             </select>
             <div className="relative w-32">
@@ -117,7 +120,7 @@ export function EventMusikerAssignment({ event, musikerList }: Props) {
               <tr key={index} className="border-b border-black">
                 <td className="p-2 text-sm font-bold border-r-2 border-black">{index + 1}.</td>
                 <td className="p-2 text-sm font-black border-r-2 border-black">
-                  {musikerList.find(m => m.id === row.musikerId)?.vorname} {musikerList.find(m => m.id === row.musikerId)?.nachname}
+                  {musikerList.find(m => m.id === row.musikerId)?.nachname} {musikerList.find(m => m.id === row.musikerId)?.vorname}
                 </td>
                 <td className="p-2 text-sm font-bold border-r-2 border-black">
                   {musikerList.find(m => m.id === row.musikerId)?.instrument || '-'}

@@ -57,6 +57,10 @@ export function MusicianDetail() {
   const [selectedEventToEdit, setSelectedEventToEdit] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', gage: 0 });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [instrumentsSettings, setInstrumentsSettings] = useState<string[]>([]);
+  const [allExistingInstruments, setAllExistingInstruments] = useState<string[]>([]);
+  
+  const uniqueInstruments = Array.from(new Set([...instrumentsSettings, ...allExistingInstruments])).sort();
 
   const confirmDelete = (eventId: string) => {
       setSelectedEventToDelete(eventId);
@@ -129,6 +133,7 @@ export function MusicianDetail() {
       ort: '',
       steuernummer: '',
       steuersatz: 13,
+      grundgage: 0,
       iban: '' // Added IBAN as requested
   });
 
@@ -152,13 +157,36 @@ export function MusicianDetail() {
                 ort: data.ort || '',
                 steuernummer: data.steuernummer || '',
                 steuersatz: data.steuersatz !== undefined ? data.steuersatz : 13,
+                grundgage: data.grundgage || 0,
                 iban: data.iban || ''
             });
         }
         setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubInstruments = onSnapshot(doc(db, `apps/${APP_ID}/settings`, 'instruments'), snap => {
+        if (snap.exists()) {
+            const data = snap.data();
+            setInstrumentsSettings(data.list || []);
+        } else {
+            setInstrumentsSettings([]);
+        }
+    });
+
+    const unsubAllMusicians = onSnapshot(collection(db, `apps/${APP_ID}/musiker`), snap => {
+        const list: string[] = [];
+        snap.forEach(d => {
+            const data = d.data();
+            if (data.instrument) list.push(data.instrument);
+        });
+        setAllExistingInstruments(Array.from(new Set(list)));
+    });
+
+    return () => {
+        unsubscribe();
+        unsubInstruments();
+        unsubAllMusicians();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -249,9 +277,9 @@ export function MusicianDetail() {
     loadEvents();
   }, [id, reloadTrigger]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: name === 'steuersatz' ? Number(value) : value }));
+      setFormData(prev => ({ ...prev, [name]: (name === 'steuersatz' || name === 'grundgage') ? Number(value) : value }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -367,11 +395,20 @@ export function MusicianDetail() {
               </div>
               <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Instrument / Rolle</label>
-                  <input name="instrument" value={formData.instrument} onChange={handleChange} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none" />
+                  <select name="instrument" value={formData.instrument} onChange={handleChange} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none bg-white">
+                    <option value="">-- Bitte wählen --</option>
+                    {uniqueInstruments.map(inst => (
+                      <option key={inst} value={inst}>{inst}</option>
+                    ))}
+                  </select>
               </div>
               <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Steuersatz (%)</label>
                   <input type="number" step="1" name="steuersatz" value={formData.steuersatz} onChange={handleChange} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none" />
+              </div>
+              <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Grundgage (€)</label>
+                  <input type="number" step="0.01" name="grundgage" value={formData.grundgage} onChange={handleChange} className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-brand-primary focus:border-transparent outline-none" />
               </div>
               <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">E-Mail</label>

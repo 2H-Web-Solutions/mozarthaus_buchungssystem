@@ -45,6 +45,9 @@ export function BookingKanban() {
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
+      const isPartnerBooking = !!b.partnerId || b.isB2B === true;
+      if (!isPartnerBooking) return false;
+
       const matchSearch = b.customerData?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           b.customerData?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           b.id.includes(searchTerm);
@@ -52,9 +55,7 @@ export function BookingKanban() {
       const matchDate = filterDate ? b.eventId.includes(filterDate.replace(/-/g, '')) : true;
       const matchPartner = filterPartnerId === 'all' 
         ? true 
-        : filterPartnerId === 'direct' 
-          ? (!b.partnerId || b.isB2B === false)
-          : b.partnerId === filterPartnerId;
+        : b.partnerId === filterPartnerId;
       
       return matchSearch && matchDate && matchPartner;
     });
@@ -200,8 +201,7 @@ export function BookingKanban() {
             onChange={(e) => setFilterPartnerId(e.target.value)}
             className="pl-10 w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#c02a2a] focus:border-transparent text-sm appearance-none bg-white"
           >
-            <option value="all">Alle Buchungen</option>
-            <option value="direct">Nur Direktbuchungen</option>
+            <option value="all">Alle Partner</option>
             <optgroup label="Partner (B2B)">
               {partners.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>

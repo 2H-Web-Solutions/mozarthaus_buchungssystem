@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { createMusiker, deleteMusiker, updateMusiker, type Musiker as MusikerType } from '../services/firebase/musikerService';
@@ -40,6 +40,9 @@ export function Musiker() {
   const [email, setEmail] = useState('');
   const [steuernummer, setSteuernummer] = useState('');
   const [steuersatz, setSteuersatz] = useState<number>(0);
+  const [grundgage, setGrundgage] = useState<number>(0);
+
+  const [instrumentsSettings, setInstrumentsSettings] = useState<string[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, `apps/${APP_ID}/musiker`), snap => {
@@ -55,7 +58,20 @@ export function Musiker() {
       list.sort((a, b) => a.nachname.localeCompare(b.nachname));
       setMusikerList(list);
     });
-    return () => unsub();
+
+    const unsubInstruments = onSnapshot(doc(db, `apps/${APP_ID}/settings`, 'instruments'), snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setInstrumentsSettings(data.list || []);
+      } else {
+        setInstrumentsSettings([]);
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubInstruments();
+    };
   }, []);
 
   const resetForm = () => {
@@ -71,6 +87,7 @@ export function Musiker() {
     setEmail('');
     setSteuernummer('');
     setSteuersatz(0);
+    setGrundgage(0);
     setEnableDigitalRole(false);
     setDigitalEmail('');
     setDigitalPassword('');
@@ -96,6 +113,7 @@ export function Musiker() {
     setEmail(m.email || '');
     setSteuernummer(m.steuernummer || '');
     setSteuersatz(m.steuersatz || 0);
+    setGrundgage(m.grundgage || 0);
     setEnableDigitalRole(false);
     setDigitalEmail('');
     setDigitalPassword('');
@@ -142,6 +160,7 @@ export function Musiker() {
         email,
         steuernummer,
         steuersatz,
+        grundgage: Number(grundgage) || 0,
         active: true
       });
 
@@ -202,7 +221,25 @@ export function Musiker() {
     return isTabMatch && isSearchMatch && isInstrumentMatch && isAllowed;
   });
 
-  const uniqueInstruments = Array.from(new Set(musikerList.map(m => m.instrument).filter(Boolean))).sort();
+  const uniqueInstruments = Array.from(new Set([...instrumentsSettings, ...musikerList.map(m => m.instrument).filter(Boolean)])).sort();
+
+  const handleAddInstrument = async () => {
+    const newInst = window.prompt("Neues Instrument eingeben:");
+    if (newInst && newInst.trim()) {
+      const trimmed = newInst.trim();
+      if (!instrumentsSettings.includes(trimmed)) {
+        const updated = [...instrumentsSettings, trimmed].sort();
+        try {
+          await setDoc(doc(db, `apps/${APP_ID}/settings`, 'instruments'), { list: updated }, { merge: true });
+          toast.success("Instrument hinzugefügt");
+        } catch (err) {
+          toast.error("Fehler beim Speichern");
+        }
+      } else {
+        toast.error("Instrument existiert bereits");
+      }
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -245,16 +282,25 @@ export function Musiker() {
 
         {/* Search & Filter */}
         <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-           <select 
-             value={filterInstrument}
-             onChange={e => setFilterInstrument(e.target.value)}
-             className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary w-full md:w-48 bg-white"
-           >
-             <option value="">Alle Instrumente</option>
-             {uniqueInstruments.map(inst => (
-               <option key={inst} value={inst}>{inst}</option>
-             ))}
-           </select>
+           <div className="flex gap-2 w-full md:w-auto">
+             <select 
+               value={filterInstrument}
+               onChange={e => setFilterInstrument(e.target.value)}
+               className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary flex-1 md:w-48 bg-white"
+             >
+               <option value="">Alle Instrumente</option>
+               {uniqueInstruments.map(inst => (
+                 <option key={inst} value={inst}>{inst}</option>
+               ))}
+             </select>
+             <button 
+               onClick={handleAddInstrument} 
+               className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-600 hover:bg-gray-50 flex-shrink-0" 
+               title="Neues Instrument hinzufügen"
+             >
+               <Plus className="w-4 h-4" />
+             </button>
+           </div>
            
            <div className="relative w-full md:w-64">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -345,7 +391,16 @@ export function Musiker() {
                
                <div className="col-span-1 md:col-span-2">
                   <label className="block text-sm text-gray-700 mb-1">Instrument / Rolle</label>
-                  <input type="text" value={instrument} onChange={e => setInstrument(e.target.value)} placeholder="z.B. 1. Violine, Dirigent..." className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
+                  <select 
+                    value={instrument} 
+                    onChange={e => setInstrument(e.target.value)} 
+                    className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary bg-white"
+                  >
+                    <option value="">-- Bitte wählen --</option>
+                    {uniqueInstruments.map(inst => (
+                      <option key={inst} value={inst}>{inst}</option>
+                    ))}
+                  </select>
                </div>
 
                <div>
@@ -387,6 +442,10 @@ export function Musiker() {
                <div>
                   <label className="block text-sm text-gray-700 mb-1">Steuersatz (%)</label>
                   <input type="number" step="0.1" value={steuersatz} onChange={e => setSteuersatz(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
+               </div>
+               <div>
+                  <label className="block text-sm text-gray-700 mb-1">Grundgage (€)</label>
+                  <input type="number" step="0.01" value={grundgage} onChange={e => setGrundgage(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
                </div>
 
                {role === 'admin' && (

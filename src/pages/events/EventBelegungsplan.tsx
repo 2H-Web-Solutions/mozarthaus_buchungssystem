@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, doc, onSnapshot, query, where, or } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, or, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { APP_ID } from '../../lib/constants';
 import { Event, Booking } from '../../types/schema';
@@ -17,9 +17,10 @@ export function EventBelegungsplan() {
   const [event, setEvent] = useState<Event | null>(null);
   const [musikerList, setMusikerList] = useState<Musiker[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [partners, setPartners] = useState<{name: string, email: string}[]>([]);
+  const [partners, setPartners] = useState<{name: string, email: string, template?: string}[]>([]);
   const [isStopSalesModalOpen, setIsStopSalesModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [globalTemplate, setGlobalTemplate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -38,7 +39,13 @@ export function EventBelegungsplan() {
     const unsubMusiker = onSnapshot(collection(db, `apps/${APP_ID}/musiker`), (snap) => {
       const list: Musiker[] = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() } as Musiker));
-      list.sort((a, b) => a.nachname.localeCompare(b.nachname));
+      list.sort((a, b) => {
+        const aActive = a.active !== false;
+        const bActive = b.active !== false;
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return (a.nachname || '').localeCompare(b.nachname || '');
+      });
       setMusikerList(list);
     });
 
@@ -72,15 +79,33 @@ export function EventBelegungsplan() {
 
     // 4. Fetch Partners for Stop-Sales
     const unsubPartners = onSnapshot(collection(db, `apps/${APP_ID}/partners`), (snap) => {
-      const pList: {name: string, email: string}[] = [];
+      const pList: {name: string, email: string, template?: string}[] = [];
       snap.forEach(d => {
         const data = d.data();
-        if (data.email) {
-          pList.push({ name: data.name || data.companyName, email: data.email });
+        if (data.email && data.notifyOnHighOccupancy === true) {
+          pList.push({ 
+            name: data.name || data.companyName, 
+            email: data.email,
+            template: data.occupancyEmailTemplate
+          });
         }
       });
       setPartners(pList);
     });
+
+    // 5. Fetch Global Template
+    const fetchGlobalTemplate = async () => {
+      try {
+        const docRef = doc(db, `apps/${APP_ID}/settings`, 'partner_email');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().template) {
+          setGlobalTemplate(docSnap.data().template);
+        }
+      } catch (e) {
+        console.error("Error fetching global template:", e);
+      }
+    };
+    fetchGlobalTemplate();
 
     return () => {
       unsubEvent();
@@ -306,15 +331,21 @@ export function EventBelegungsplan() {
                >
                  Abbrechen
                </button>
-               {partners.length > 0 && (
-                 <a 
-                   href={`mailto:?bcc=${partners.map(p => p.email).join(',')}&subject=${encodeURIComponent(`Stop Sales: Mozarthaus Konzert am ${eventDateStr}`)}&body=${encodeURIComponent(`Sehr geehrte Partner,\n\nbitte stoppen Sie ab sofort den Ticketverkauf für das Konzert am ${eventDateStr}, da wir die Kapazitätsgrenze erreicht haben.\n\nVielen Dank.`)}`}
-                   className="px-5 py-2.5 bg-brand-red text-white font-bold rounded-lg hover:bg-red-800 transition shadow-md flex items-center gap-2"
-                   onClick={() => setIsStopSalesModalOpen(false)}
-                 >
-                   E-Mail Programm öffnen
-                 </a>
-               )}
+               {partners.length > 0 && (() => {
+                 const defaultTemplate = `Sehr geehrte Damen und Herren,\n\nDas Konzert am [Datum/Zeit] ist bereits ausverkauft.\n\nFür weitere Fragen stehen wir gerne unter konzerte@mozarthaus.at oder telefonisch unter (0043)-1-911 9077 bereit!\n\nWir danken Ihnen für die Mitarbeit und verbleiben,\n\nmit freundlichen Grüßen\n\nIhr Konzerte im Mozarthaus - Team\n\nwww.mozarthaus.at\nSingerstrasse 7\nA - 1010 Wien\n(0043)-1-911 9077`;
+                 const templateToUse = globalTemplate || defaultTemplate;
+                 const bodyText = templateToUse.replace('[Datum/Zeit]', `${eventDateStr} ${event.time || ''} Uhr`);
+                 
+                 return (
+                   <a 
+                     href={`mailto:?bcc=${partners.map(p => p.email).join(',')}&subject=${encodeURIComponent(`Stop Sales: Mozarthaus Konzert am ${eventDateStr}`)}&body=${encodeURIComponent(bodyText)}`}
+                     className="px-5 py-2.5 bg-brand-red text-white font-bold rounded-lg hover:bg-red-800 transition shadow-md flex items-center gap-2"
+                     onClick={() => setIsStopSalesModalOpen(false)}
+                   >
+                     E-Mail Programm öffnen
+                   </a>
+                 );
+               })()}
             </div>
           </div>
         </div>

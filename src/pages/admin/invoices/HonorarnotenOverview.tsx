@@ -111,6 +111,7 @@ export function HonorarnotenOverview() {
 
   }, [events, musiker, selectedMonth, selectedYear]);
 
+  const totalSummeNetto = aggregatedData.reduce((acc, curr) => acc + curr.totalNetto, 0);
   const totalSummeBrutto = aggregatedData.reduce((acc, curr) => acc + curr.totalBrutto, 0);
 
   const handleDownloadPdf = async (m: Musiker) => {
@@ -185,7 +186,101 @@ export function HonorarnotenOverview() {
     } finally {
         setIsDownloading(null);
     }
-};
+  };
+
+  const handleDownloadAllPdf = async () => {
+      setIsDownloading('all');
+      try {
+          const startOfMonth = new Date(selectedYear, selectedMonth, 1);
+          const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+          const now = new Date(); 
+  
+          const monthEvents = events.filter(e => {
+              if (e.status === 'cancelled') return false; 
+              const d = parseEventDate(e.date);
+              return d >= startOfMonth && d <= endOfMonth && d <= now;
+          });
+
+          const musicianGigs: { musiker: Musiker, gigs: Gig[] }[] = [];
+          
+          aggregatedData.forEach(data => {
+              const m = data.musiker;
+              const gigs: Gig[] = [];
+              monthEvents.forEach(e => {
+                  if (!e.ensemble) return;
+                  const member = e.ensemble.find(mem => mem.musikerId === m.id && mem.status !== 'abgesagt');
+                  if (member) {
+                      const d = parseEventDate(e.date);
+                      const dateStr = `${padTo2Digits(d.getDate())}.${padTo2Digits(d.getMonth() + 1)}.${d.getFullYear()}`;
+                      const timeStr = e.time ? e.time : '20:00';
+                      gigs.push({
+                          dateStr: `${dateStr} ${timeStr}`,
+                          gage: member.gage || 0
+                      });
+                  }
+              });
+      
+              gigs.sort((a,b) => {
+                const partsA = a.dateStr.split(' ')[0].split('.');
+                const partsB = b.dateStr.split(' ')[0].split('.');
+                const codeA = `${partsA[2]}${partsA[1]}${partsA[0]}`;
+                const codeB = `${partsB[2]}${partsB[1]}${partsB[0]}`;
+                return codeA.localeCompare(codeB);
+              });
+              
+              if (gigs.length > 0) {
+                 musicianGigs.push({ musiker: m, gigs });
+              }
+          });
+
+        if (musicianGigs.length === 0) {
+           alert("Keine Honorarnoten zum Exportieren vorhanden.");
+           setIsDownloading(null);
+           return;
+        }
+
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.zIndex = '-1000';
+        container.style.width = '800px'; 
+        document.body.appendChild(container);
+
+        const root = createRoot(container);
+        root.render(
+            <div>
+              {musicianGigs.map((item, idx) => (
+                  <div key={item.musiker.id} style={{ pageBreakAfter: idx < musicianGigs.length - 1 ? 'always' : 'auto' }}>
+                     <HonorarnoteTemplateView musiker={item.musiker} gigs={item.gigs} month={selectedMonth + 1} year={selectedYear} />
+                  </div>
+              ))}
+            </div>
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 2000)); // wait for render and font paint
+
+        const content = (container.firstElementChild || container) as HTMLElement;
+
+        const periodStr = `${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`;
+        const opt = {
+            margin: 10,
+            filename: `Sammel_Honorarnoten_${periodStr}.pdf`,
+            image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: 800 }, 
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as 'portrait' }
+        };
+
+        await html2pdf().set(opt).from(content).save();
+
+        root.unmount();
+        document.body.removeChild(container);
+    } catch (err) {
+        console.error("Failed to generate PDF", err);
+    } finally {
+        setIsDownloading(null);
+    }
+  };
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
@@ -200,7 +295,21 @@ export function HonorarnotenOverview() {
             </div>
         </div>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-col md:flex-row gap-4 items-end md:items-center">
+            <button
+               onClick={handleDownloadAllPdf}
+               disabled={isDownloading === 'all' || aggregatedData.length === 0}
+               className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-50"
+            >
+               {isDownloading === 'all' ? (
+                   <div className="w-4 h-4 rounded-full border-t-2 border-r-2 border-white animate-spin"></div>
+               ) : (
+                   <>
+                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                       Alle als PDF exportieren
+                   </>
+               )}
+            </button>
             <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-1.5">
                 <CalendarDays className="w-5 h-5 text-gray-500 ml-2" />
                 <select 
@@ -296,7 +405,11 @@ export function HonorarnotenOverview() {
                         )}
                         {aggregatedData.length > 0 && (
                             <tr className="bg-gray-50/80 border-t border-gray-200">
-                                <td colSpan={4} className="p-4 text-right font-bold text-gray-600">Gesamtsumme Brutto (Monat)</td>
+                                <td colSpan={2} className="p-4 text-right font-bold text-gray-600">Gesamtsumme (Monat)</td>
+                                <td className="p-4 text-right font-black text-gray-900 text-lg">
+                                    € {totalSummeNetto.toLocaleString('de-AT', {minimumFractionDigits: 2})}
+                                </td>
+                                <td></td>
                                 <td className="p-4 text-right font-black text-brand-primary text-lg">
                                     € {totalSummeBrutto.toLocaleString('de-AT', {minimumFractionDigits: 2})}
                                 </td>

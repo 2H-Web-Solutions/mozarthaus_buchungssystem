@@ -25,6 +25,8 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Admins } from './pages/auth/Admins';
 import { HonorarnotenOverview } from './pages/admin/invoices/HonorarnotenOverview';
 import { HonorarnotePrintTemplate } from './pages/admin/invoices/HonorarnotePrintTemplate';
+import { PartnerInvoicesOverview } from './pages/admin/invoices/PartnerInvoicesOverview';
+import { PartnerInvoicePrintTemplate } from './pages/admin/invoices/PartnerInvoicePrintTemplate';
 
 // Helper component to redirect users based on their role logic
 function RoleBasedIndex() {
@@ -65,6 +67,7 @@ function App() {
           <Route path="stammdaten/pricing" element={<PricingCategories />} />
           <Route path="stammdaten/admin" element={<Admins />} />
           <Route path="invoices/honorarnoten" element={<HonorarnotenOverview />} />
+          <Route path="invoices/partner" element={<PartnerInvoicesOverview />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="settings" element={<Settings />} />
           <Route path="admin/system-test" element={<SyncValidator />} />
@@ -72,6 +75,7 @@ function App() {
         {/* Print-only routes without Dashboard Shell */}
         <Route path="/events/:eventId/honorarnote/:musikerId" element={<ProtectedRoute><HonorarnotePrint /></ProtectedRoute>} />
         <Route path="/invoices/honorarnoten/print/:year/:month/:musikerId" element={<ProtectedRoute><HonorarnotePrintTemplate /></ProtectedRoute>} />
+        <Route path="/invoices/partner/print/:year/:month/:partnerId" element={<ProtectedRoute><PartnerInvoicePrintTemplate /></ProtectedRoute>} />
       </Routes>
     </Router>
     </AuthProvider>
