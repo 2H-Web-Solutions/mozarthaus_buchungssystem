@@ -3,9 +3,9 @@ import { collection, onSnapshot, doc, setDoc, getDocs, updateDoc, deleteDoc, get
 import { db } from '../lib/firebase';
 import { APP_ID } from '../lib/constants';
 import { Partner } from '../types/schema';
-import { Plus, Users, Search, Edit2, Archive, ArchiveRestore, Trash2, RefreshCw, Mail } from 'lucide-react';
+import { Plus, Users, Search, Edit2, Archive, Trash2, RefreshCw, Mail } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
-import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
+
 
 export function Partners() {
   const [partners, setPartners] = useState<Partner[]>([]);
